@@ -1,0 +1,32 @@
+# Monjaro — nginx servindo o app estático + injeção de env no boot.
+# Estado vive no Supabase; container é descartável (sem volumes persistentes).
+services:
+  web:
+    image: nginx:alpine
+    env_file: .env
+    # Reexporta para o envsubst do entrypoint (gera app/env.js -> /tmp/env.js)
+    environment:
+      - SUPABASE_URL
+      - SUPABASE_ANON_KEY
+      - APP_TOKEN
+      - ENV
+    ports:
+      - "8080:80"
+    volumes:
+      - ./app:/usr/share/nginx/html:ro
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/generate-env.sh:/docker-entrypoint.d/40-generate-env.sh:ro
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

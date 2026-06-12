@@ -1,0 +1,49 @@
+/* Monjaro — design tokens + base. Componentes completos: ver brand.md.
+   STUB: tokens definidos; estilos de componentes a implementar. */
+
+:root {
+  /* Marca */
+  --primary:      #6C63FF;
+  --primary-dark: #5A52D5;
+
+  /* Status */
+  --success: #2ECC71;
+  --warning: #F39C12;
+  --danger:  #E74C3C;
+
+  /* Superfícies (dark) */
+  --dark:   #1A1A2E;
+  --card:   #16213E;
+  --card2:  #0F3460;
+
+  /* Texto e bordas */
+  --text:       #E0E0E0;
+  --text-muted: #8892A4;
+  --border:     #2A2A4A;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--dark);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  min-height: 100vh;
+  padding-bottom: 80px; /* espaço para a bottom-nav fixa */
+}
+
+/* Badges de status (helpers prontos — ver mapa cor→significado em brand.md) */
+.badge-green  { background: rgba(46,204,113,.2);  color: var(--success); }
+.badge-yellow { background: rgba(243,156,18,.2);  color: var(--warning); }
+.badge-red    { background: rgba(231,76,60,.2);   color: var(--danger);  }
+.badge-purple { background: rgba(108,99,255,.2);  color: var(--primary); }
+.badge-gray   { background: rgba(136,146,164,.2); color: var(--text-muted); }
+
+/* Páginas: só uma ativa por vez */
+.page { display: none; }
+.page.active { display: block; }
+
+/* TODO (ver brand.md + ui.md):
+   .header, .bottom-nav/.nav-item, .card/.summary-card, .btn-*,
+   .form-input/.form-label, .modal-overlay/.modal, .list-item, .tabs,
+   .progress, .empty, badges textuais de status. */

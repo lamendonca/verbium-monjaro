@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Gestão Monjaro</title>
+  <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+  <!--
+    STUB — esqueleto da estrutura. Implementar conforme ui.md + brand.md.
+    Estrutura alvo (app de página única, sem router):
+      <div id="login">           ... tela de token (auth.js)
+      <header class="header">    ... título + subtítulo
+      <main>
+        <section id="page-inicio"     class="page active"> KPIs + alertas recompra
+        <section id="page-clientes"   class="page">       lista + CRUD + WhatsApp
+        <section id="page-pedidos"    class="page">       lista + CRUD + vínculo lote
+        <section id="page-lotes"      class="page">       lista compras + estoque
+        <section id="page-financeiro" class="page">       lucro por lote/cliente
+      <nav class="bottom-nav">   ... 5 abas: Início Clientes Pedidos Lotes Financeiro
+      <div class="modal-overlay">... modais slide-up de cadastro/edição
+
+    Ordem dos scripts: env.js PRIMEIRO (injeta window.__ENV__), depois os módulos.
+  -->
+
+  <!-- env injetada em runtime pelo nginx (gitignored). NÃO remover. -->
+  <script src="/env.js"></script>
+
+  <!-- Módulos ES (sem bundler). db.js é a única porta do Supabase. -->
+  <script type="module" src="./js/config.js"></script>
+  <script type="module" src="./js/auth.js"></script>
+  <!-- demais módulos importados sob demanda pelas telas:
+       clientes.js · pedidos.js · compras.js · financeiro.js -->
+</body>
+</html>
