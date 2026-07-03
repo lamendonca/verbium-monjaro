@@ -9,7 +9,7 @@ Aplicação pessoal de gestão de vendas de Monjaro. Controla clientes, pedidos,
 - **Quem usa**: o próprio operador, pelo **celular**, sempre. Mobile first não é preferência — é requisito.
 - **Domínio**: revende Monjaro para amigos. Vende ~50 unidades por ciclo; precisa comprar ≥ 20 por lote para a compra ser viável.
 - **O que controla**: clientes (nome, contato, frequência de recompra em dias), pedidos, compras ao fornecedor (lotes), estoque por lote e financeiro (lucro por lote e por cliente).
-- **O que NÃO faz**: não é multi-usuário, não cadastra dose por apresentação (produto único — 1 unidade de 4ml), não envia mensagens automáticas (só gera o alerta e abre o WhatsApp).
+- **O que NÃO faz**: não é multi-usuário, não cadastra dose por apresentação (produto único — 1 unidade de 4ml). Mensagens automáticas existem **só** no Follow-up agendado (via Evolution API + pg_cron — `business-rules.md` §6); alertas de recompra continuam manuais (abrem o WhatsApp).
 
 ## Stack
 
@@ -66,7 +66,8 @@ monjaro/
 
 ## Schema — `monjaro.*` (resumo; fonte da verdade: `data-model.md` + `sql/001_schema.sql`)
 
-- `clientes` — `nome`, `contato` (WhatsApp), `frequencia` (dias entre recompras), `dose` (opcional, texto livre).
+- `clientes` — `nome`, `contato` (WhatsApp), `frequencia` (estimativa opcional; efetiva é calculada do histórico), `dose` (opcional), `perdido_em`/`negociacao_em` (funil).
+- `followups` — mensagens agendadas: FK `cliente_id`, `data`, `mensagem`, `enviado_em` (envio via Evolution/pg_cron). `config` — credenciais (RLS deny; anon não lê).
 - `compras` — lotes do fornecedor: `qtd`, `qtd_disp` (decrementa a cada pedido), `custo_total`, `custo_unit`, `pagamento`, `chegada`, `referencia`.
 - `pedidos` — venda: FK `cliente_id`, FK `compra_id` (lote de baixa, nullable), `valor`, `pagamento`, `entrega`.
 

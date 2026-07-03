@@ -126,11 +126,15 @@ Fases **derivadas** dos dados — nenhum estado extra persistido. Por cliente at
 | Condição (1ª que casar) | Fase |
 |---|---|
 | **Perdido** (`perdido_em` setado, sem pedido posterior) | **Perdido** (visível por 14 dias; depois sai do funil) |
+| **Follow-up pendente** (`followups` com `enviado_em IS NULL`) | **Follow-up** (mensagem automática agendada) |
 | Sem nenhum pedido | **Não iniciada** ("novo — em negociação") |
 | Último pedido com `pagamento ≠ pago` | **Pendente pagamento** |
 | Último pedido pago e `entrega ≠ entregue` | **Pago** |
+| `negociacao_em` ≥ data do último pedido (retomada manual) | **Não iniciada** ("em negociação") |
 | Ciclo concluído e recompra `atrasado`/`alerta` | **Não iniciada** (retomada automática, com botão WhatsApp) |
 | Ciclo concluído, sem alerta | **Entregue medicação** (descansa até o próximo ciclo) |
+
+**Follow-up** (tabela `followups`, migration `007`): mover um card pra cá abre modal de **data + mensagem**. Um job `pg_cron` (`monjaro_followups`, diário às 12:00 UTC ≈ 9h Brasília) chama `monjaro.enviar_followups()`, que envia as mensagens vencidas via **Evolution API** (`pg_net` → `POST /message/sendText/{instance}`) e marca `enviado_em`. Credenciais em `monjaro.config` (`evolution_url`, `evolution_instance`, `evolution_apikey`) — RLS deny, anon não lê. Um followup pendente por cliente; sair da coluna cancela (`is_active=false`); após enviado, o card volta à derivação normal.
 
 - Retomada pro funil é automática via alerta de recompra (§1); inclusão manual acontece ao cadastrar o cliente (entra sem pedido → Não iniciada).
 - "Não iniciada" ordena por urgência: atrasados → novos → alertas. "Entregue" ordena do mais recente.
@@ -140,16 +144,19 @@ Fases **derivadas** dos dados — nenhum estado extra persistido. Por cliente at
 - Fica na coluna Perdido por `PERDIDO_DIAS_VISIVEL = 14` dias (constante em `clientes.js`); depois some do funil, mas continua fora dos alertas.
 - Volta ao ciclo com **novo pedido** (pedido com data posterior a `perdido_em` anula o perdido — sem write extra) ou pelo botão **Retomar** (limpa `perdido_em`).
 
-**Arrasto (long-press de 250ms no card)** — cada movimento grava a mudança correspondente:
+**Arrasto** (mouse: imediato; touch: segurar ~200ms) — cada movimento grava a mudança correspondente:
 | Movimento | Efeito |
 |---|---|
 | qualquer → Perdido | `marcarPerdido` (com confirmação) |
+| qualquer → Follow-up | modal de data+mensagem → agenda envio automático |
+| saiu do Follow-up | cancela o followup pendente, depois aplica o destino |
 | Perdido → Não iniciada | `retomarCliente` |
+| Entregue → Não iniciada | `marcarNegociacao` (retomada manual) |
+| Pendente/Pago → Não iniciada | **remove o pedido em aberto** (confirmação; estoque volta) + `marcarNegociacao` |
 | Pendente → Pago | último pedido `pagamento = pago` |
 | Pago/Pendente → Entregue | `pagamento = pago` + `entrega = entregue` |
 | Pago → Pendente · Entregue → Pago | correções (reverte pagamento / entrega → `separado`) |
 | Não iniciada/Perdido → fase de pedido | abre **novo pedido** pré-preenchido (novo ciclo); salvar conclui o movimento |
-| qualquer → Não iniciada | recusado — volta é automática (recompra) ou via Retomar |
 
 ## 7. Datas e fuso
 

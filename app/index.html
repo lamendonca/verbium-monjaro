@@ -172,6 +172,27 @@
     </div>
   </div>
 
+  <!-- ===== Modal: follow-up (agendar mensagem automática) ===== -->
+  <div class="modal-overlay" id="modal-followup">
+    <div class="modal">
+      <div class="modal-handle"></div>
+      <div class="modal-title" id="modal-followup-titulo">Follow-up</div>
+      <form id="form-followup">
+        <input type="hidden" id="followup-cliente">
+        <div class="form-group">
+          <label class="form-label" for="followup-data">Enviar em *</label>
+          <input class="form-input" id="followup-data" type="date" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="followup-mensagem">Mensagem *</label>
+          <textarea class="form-input" id="followup-mensagem" rows="3" required></textarea>
+          <div class="form-hint">Enviada automaticamente pelo WhatsApp (Evolution) por volta das 9h do dia escolhido.</div>
+        </div>
+        <button type="submit" class="btn btn-primary">Agendar</button>
+      </form>
+    </div>
+  </div>
+
   <!-- ===== Modal: pedido ===== -->
   <div class="modal-overlay" id="modal-pedido">
     <div class="modal">

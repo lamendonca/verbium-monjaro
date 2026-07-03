@@ -10,11 +10,43 @@ import {
 import { listarPedidos, novoPedidoParaCliente, removerPedido } from './pedidos.js';
 import { estoqueLivre } from './compras.js';
 import { consolidado } from './financeiro.js';
-import { update } from './db.js';
+import { db, update, insert } from './db.js';
 import {
   el, renderInto, loadingState, emptyState, errorState, fmtMoney, fmtData,
-  parseDateLocal, hojeLocal, diffDias, toast,
+  parseDateLocal, hojeLocal, diffDias, hojeISO, toast, openModal, closeModal,
+  submitOnce,
 } from './ui.js';
+
+// ---- Follow-up (mensagem automática via Evolution — business-rules.md §6) ----
+async function followupsPendentes() {
+  const { data, error } = await db.from('followups')
+    .select('*').eq('is_active', true).is('enviado_em', null);
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+async function cancelarFollowup(clienteId) {
+  const { error } = await db.from('followups')
+    .update({ is_active: false })
+    .eq('cliente_id', clienteId).eq('is_active', true).is('enviado_em', null);
+  if (error) throw new Error(error.message);
+}
+
+async function agendarFollowup(clienteId, data, mensagem) {
+  await cancelarFollowup(clienteId); // um pendente por cliente
+  return insert('followups', { cliente_id: clienteId, data, mensagem });
+}
+
+// Modal preenchido/aberto pelo arrasto; submit é ligado uma vez no init.
+let followupOnSave = null;
+function abrirModalFollowup(cliente, onSave) {
+  document.getElementById('followup-cliente').value = cliente.id;
+  document.getElementById('followup-data').value = hojeISO();
+  document.getElementById('followup-mensagem').value =
+    `Oi ${cliente.nome}! Passando pra ver se você já vai querer repor o Monjaro. 😊`;
+  followupOnSave = onSave || null;
+  openModal('modal-followup');
+}
 
 function itemAlerta(a) {
   const atrasado = a.status === 'atrasado';
@@ -36,16 +68,19 @@ function itemAlerta(a) {
 // recompra > descanso em "entregue". Cliente sem pedido = topo do funil.
 // Perdido fica visível por PERDIDO_DIAS_VISIVEL dias e some do funil
 // (e dos alertas) até novo pedido ou retomada manual.
-function montarFunil(clientes, recompraMap, ultimoPedidoMap) {
-  const fases = { nao_iniciada: [], pendente: [], pago: [], entregue: [], perdido: [] };
+function montarFunil(clientes, recompraMap, ultimoPedidoMap, followupMap) {
+  const fases = { nao_iniciada: [], followup: [], pendente: [], pago: [], entregue: [], perdido: [] };
   for (const c of clientes) {
     const r = recompraMap.get(c.id);
     const p = ultimoPedidoMap.get(c.id);
+    const f = followupMap.get(c.id);
     if (estaPerdido(c, r?.ultimo_pedido)) {
       const dias = diffDias(hojeLocal(), parseDateLocal(c.perdido_em));
       if (dias <= PERDIDO_DIAS_VISIVEL) {
-        fases.perdido.push({ c, sub: `não quis em ${fmtData(c.perdido_em)}`, retomar: true });
+        fases.perdido.push({ c, p, sub: `não quis em ${fmtData(c.perdido_em)}`, retomar: true });
       }
+    } else if (f) {
+      fases.followup.push({ c, p, f, sub: `mensagem em ${fmtData(f.data)}`, data: f.data });
     } else if (!p) {
       fases.nao_iniciada.push({ c, sub: 'novo — em negociação', urgencia: 1 });
     } else if (p.pagamento !== 'pago') {
@@ -66,6 +101,7 @@ function montarFunil(clientes, recompraMap, ultimoPedidoMap) {
     }
   }
   fases.nao_iniciada.sort((a, b) => (a.urgencia ?? 9) - (b.urgencia ?? 9));
+  fases.followup.sort((a, b) => (a.data || '').localeCompare(b.data || ''));
   fases.entregue.sort((a, b) => (b.data || '').localeCompare(a.data || ''));
   return fases;
 }
@@ -76,6 +112,13 @@ function montarFunil(clientes, recompraMap, ultimoPedidoMap) {
 async function moverCard(item, de, para, onChanged) {
   const { c, p } = item;
   try {
+    // sair do Follow-up cancela a mensagem agendada
+    if (de === 'followup' && para !== 'followup') await cancelarFollowup(c.id);
+    if (para === 'followup') {
+      if (de === 'perdido') await retomarCliente(c.id);
+      abrirModalFollowup(c, onChanged);
+      return;
+    }
     if (para === 'perdido') {
       if (!confirm(`Marcar ${c.nome} como perdido? Ele sai dos alertas por enquanto.`)) return;
       await marcarPerdido(c.id);
@@ -255,12 +298,29 @@ export function initInicio() {
   const listaAlertas = document.getElementById('lista-alertas');
   const funilEl = document.getElementById('funil');
 
+  submitOnce(document.getElementById('form-followup'), async () => {
+    try {
+      await agendarFollowup(
+        document.getElementById('followup-cliente').value,
+        document.getElementById('followup-data').value,
+        document.getElementById('followup-mensagem').value.trim(),
+      );
+      closeModal('modal-followup');
+      toast('Follow-up agendado.');
+      followupOnSave?.();
+      followupOnSave = null;
+    } catch {
+      toast('Não consegui agendar. Tenta de novo.');
+    }
+  });
+
   async function refresh() {
     loadingState(listaAlertas);
     loadingState(funilEl);
     try {
-      const [clientes, pedidos, recompra, estoque, cons] = await Promise.all([
-        listarClientes(), listarPedidos(), recompraPorCliente(), estoqueLivre(), consolidado(),
+      const [clientes, pedidos, recompra, followups, estoque, cons] = await Promise.all([
+        listarClientes(), listarPedidos(), recompraPorCliente(), followupsPendentes(),
+        estoqueLivre(), consolidado(),
       ]);
       document.getElementById('kpi-clientes').textContent = clientes.length;
       document.getElementById('kpi-estoque').textContent = `${estoque} un`;
@@ -275,9 +335,11 @@ export function initInicio() {
         if (!ultimoPedidoMap.has(p.cliente_id)) ultimoPedidoMap.set(p.cliente_id, p);
       }
       const recompraMap = new Map(recompra.map((r) => [r.cliente_id, r]));
-      const fases = montarFunil(clientes, recompraMap, ultimoPedidoMap);
+      const followupMap = new Map(followups.map((f) => [f.cliente_id, f]));
+      const fases = montarFunil(clientes, recompraMap, ultimoPedidoMap, followupMap);
       renderInto(funilEl, [
         colunaFunil('Não iniciada', 'nao_iniciada', fases.nao_iniciada, refresh),
+        colunaFunil('Follow-up', 'followup', fases.followup, refresh),
         colunaFunil('Pendente pagamento', 'pendente', fases.pendente, refresh),
         colunaFunil('Pago', 'pago', fases.pago, refresh),
         colunaFunil('Entregue medicação', 'entregue', fases.entregue, refresh),
