@@ -100,6 +100,16 @@ Data base: 2026-06-12
 
 ---
 
+## ADR-013 — Frequência de recompra calculada pelo histórico (revisa ADR-004)
+
+**Data**: 2026-07-03
+**Contexto**: o cadastro exigia `frequencia` manual, mas o operador quer que a agenda de acionamento nasça do comportamento real do cliente.
+**Decisão**: `clientes.frequencia` vira **estimativa inicial opcional** (nullable, migration `004`). A partir da **2ª compra**, a frequência efetiva é a média dos intervalos entre as datas distintas de pedidos — `(MAX(data) − MIN(data)) / (compras − 1)` — calculada na view `v_cliente_recompra`, e **prevalece** sobre a estimativa.
+**Novos estados**: cliente com 1 compra e sem estimativa fica `sem_padrao` ("Aguardando 2ª compra") e não entra na agenda do Início.
+**Revisa**: ADR-004 (frequência manual obrigatória). Mantém a antecedência fixa de 10 dias.
+
+---
+
 ## Pendências / decisões adiadas
 
 - **Pagamento parcial com valor**: hoje `parcial` conta como "a receber" inteiro. Se precisar do valor pago exato, adicionar `valor_pago` em migration `002`. Não implementar antes de pedido.

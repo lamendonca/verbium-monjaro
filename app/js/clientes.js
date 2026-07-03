@@ -17,19 +17,23 @@ export async function salvarCliente(cliente) {
   return insert('clientes', cliente);
 }
 
-// status ∈ atrasado | alerta | ok | sem_pedido (business-rules.md §1).
-export function statusRecompra(proximaRecompraISO) {
-  if (!proximaRecompraISO) return { status: 'sem_pedido', dias_restantes: null };
-  const dias = diffDias(parseDateLocal(proximaRecompraISO), hojeLocal());
+// status ∈ atrasado | alerta | ok | sem_padrao | sem_pedido (business-rules.md §1).
+// sem_padrao = já comprou, mas ainda não há frequência (nem calculada nem estimada).
+export function statusRecompra({ proxima_recompra, ultimo_pedido } = {}) {
+  if (!proxima_recompra) {
+    return { status: ultimo_pedido ? 'sem_padrao' : 'sem_pedido', dias_restantes: null };
+  }
+  const dias = diffDias(parseDateLocal(proxima_recompra), hojeLocal());
   if (dias < 0) return { status: 'atrasado', dias_restantes: dias };
   if (dias <= 10) return { status: 'alerta', dias_restantes: dias };
   return { status: 'ok', dias_restantes: dias };
 }
 
-// Base do alerta: view v_cliente_recompra (ultimo_pedido + proxima_recompra).
+// Base do alerta: view v_cliente_recompra. `frequencia` da view é a EFETIVA:
+// calculada do histórico (≥ 2 compras) ou, sem histórico, a estimativa manual.
 export async function recompraPorCliente() {
   const rows = await listView('v_cliente_recompra');
-  return rows.map((r) => ({ ...r, ...statusRecompra(r.proxima_recompra) }));
+  return rows.map((r) => ({ ...r, ...statusRecompra(r) }));
 }
 
 // Tela Início: só atrasado/alerta, mais urgente primeiro. sem_pedido fica fora.
@@ -52,6 +56,7 @@ const badgeStatus = {
   atrasado: ['badge-red', 'Atrasado'],
   alerta: ['badge-yellow', 'Alerta'],
   ok: ['badge-green', 'Ok'],
+  sem_padrao: ['badge-gray', 'Aguardando 2ª compra'],
   sem_pedido: ['badge-gray', 'Sem pedido'],
 };
 
@@ -68,10 +73,14 @@ export function botaoWhatsApp(nome, contato) {
 function itemCliente(cliente, recompra, onEdit) {
   const [cls, label] = badgeStatus[recompra?.status || 'sem_pedido'];
   const ultimo = recompra?.ultimo_pedido ? ` · último ${fmtData(recompra.ultimo_pedido)}` : '';
+  // Frequência efetiva vem da view; se calculada do histórico, sinalizar.
+  const freq = recompra?.frequencia
+    ? `a cada ${recompra.frequencia} dias${recompra.compras >= 2 ? ' (calculado)' : ' (estimado)'}`
+    : 'ritmo a definir';
   return el('div', { class: 'list-item' },
     el('div', { class: 'info' },
       el('div', { class: 'title' }, cliente.nome),
-      el('div', { class: 'sub' }, `a cada ${cliente.frequencia} dias${ultimo}${cliente.dose ? ` · ${cliente.dose}` : ''}`),
+      el('div', { class: 'sub' }, `${freq}${ultimo}${cliente.dose ? ` · ${cliente.dose}` : ''}`),
       el('div', { class: 'badges' }, el('span', { class: `badge ${cls}` }, label))),
     el('div', { class: 'actions' },
       botaoWhatsApp(cliente.nome, cliente.contato),
@@ -134,7 +143,7 @@ export function initClientes() {
         id: campos.id.value || undefined,
         nome: campos.nome.value.trim(),
         contato: campos.contato.value.trim(),
-        frequencia: Number(campos.frequencia.value),
+        frequencia: campos.frequencia.value ? Number(campos.frequencia.value) : null,
         dose: campos.dose.value.trim() || null,
       });
       closeModal('modal-cliente');

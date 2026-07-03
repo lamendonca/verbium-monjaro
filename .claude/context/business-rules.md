@@ -4,12 +4,21 @@ Lógica do domínio: alertas de recompra, estoque por lote, lucro e WhatsApp. Su
 
 ## 1. Alerta de recompra (coração do app)
 
-O operador quer ser avisado **10 dias antes** de o cliente precisar recomprar, com base na frequência (em dias) de cada cliente.
+O operador quer ser avisado **10 dias antes** de o cliente precisar recomprar. A frequência **não é cadastrada obrigatoriamente**: o sistema calcula o ritmo real do cliente a partir do histórico (ADR-013).
+
+**Frequência efetiva** (calculada na view `v_cliente_recompra`, migration `004`):
+```
+compras (datas distintas de pedidos ativos) >= 2:
+  frequencia = ROUND( (MAX(data) - MIN(data)) / (compras - 1) )   -- média dos intervalos
+senão:
+  frequencia = clientes.frequencia (estimativa manual OPCIONAL; pode ser NULL)
+```
+A frequência calculada **prevalece** sobre a estimativa — comportamento real vale mais que chute inicial.
 
 **Definições** (datas em dias, sem hora):
 ```
 ultimo_pedido    = MAX(pedidos.data) do cliente (pedidos ativos)
-proxima_recompra = ultimo_pedido + cliente.frequencia
+proxima_recompra = ultimo_pedido + frequencia_efetiva   (NULL se não há frequência)
 dias_restantes   = proxima_recompra - hoje
 ```
 
@@ -19,10 +28,11 @@ dias_restantes   = proxima_recompra - hoje
 | `dias_restantes < 0` | `atrasado` | vermelho (`--danger`) |
 | `0 <= dias_restantes <= 10` | `alerta` | amarelo (`--warning`) |
 | `dias_restantes > 10` | `ok` | verde (`--success`) |
+| comprou 1x e sem estimativa | `sem_padrao` | cinza — "Aguardando 2ª compra" |
 | sem nenhum pedido ainda | `sem_pedido` | cinza (`--text-muted`) |
 
 - A tela **Início** lista clientes com status `atrasado` ou `alerta`, ordenados por `proxima_recompra` ascendente (mais urgente primeiro).
-- Cliente `sem_pedido` não entra na lista de acionamento (não há base para prever).
+- Clientes `sem_pedido` e `sem_padrao` não entram na lista de acionamento (não há base para prever).
 - "Antecedência" é fixa em **10 dias** (decisão do operador). Se virar configurável, vira env/parametrização — não assumir antes de pedir.
 
 > Fonte de dados: view `monjaro.v_cliente_recompra` (ver `data-model.md`) entrega `ultimo_pedido` e `proxima_recompra`. O cálculo de `dias_restantes` e do status pode ficar no JS (`clientes.js`), usando a data local do dispositivo.

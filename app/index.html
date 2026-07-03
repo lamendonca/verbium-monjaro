@@ -146,14 +146,15 @@
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label" for="cliente-frequencia">Recompra (dias) *</label>
-            <input class="form-input" id="cliente-frequencia" type="number" min="1" required>
+            <label class="form-label" for="cliente-frequencia">Recompra (dias) — estimativa</label>
+            <input class="form-input" id="cliente-frequencia" type="number" min="1" placeholder="opcional">
           </div>
           <div class="form-group">
             <label class="form-label" for="cliente-dose">Dose (opcional)</label>
             <input class="form-input" id="cliente-dose">
           </div>
         </div>
+        <div class="form-hint" style="margin:-6px 0 14px">A partir da 2ª compra, o ritmo real do cliente é calculado automaticamente e vale mais que a estimativa.</div>
         <button type="submit" class="btn btn-primary">Salvar</button>
         <button type="button" class="btn btn-danger hidden" id="btn-remover-cliente" style="width:100%; margin-top:10px">Remover cliente</button>
       </form>
