@@ -65,6 +65,20 @@ export async function removerPedido(pedido) {
   await ajustarEstoque(pedido.compra_id, pedido.qtd); // devolve estoque
 }
 
+// ---- Novo pedido a partir de outra tela (ex.: arrasto no funil) ----
+// initPedidos registra o abridor do modal; onSave roda uma vez após salvar.
+let abrirModalRef = null;
+let aoSalvarExtra = null;
+
+export async function novoPedidoParaCliente(clienteId, { pagamento, entrega, onSave } = {}) {
+  if (!abrirModalRef) return;
+  await abrirModalRef(null);
+  document.getElementById('pedido-cliente').value = clienteId;
+  if (pagamento) document.getElementById('pedido-pagamento').value = pagamento;
+  if (entrega) document.getElementById('pedido-entrega').value = entrega;
+  aoSalvarExtra = onSave || null;
+}
+
 // ---- Tela Pedidos ----
 const badgePagamento = {
   pago: ['badge-green', 'Pago'],
@@ -175,6 +189,7 @@ export function initPedidos() {
   });
 
   document.getElementById('btn-novo-pedido').addEventListener('click', () => abrirModal(null));
+  abrirModalRef = abrirModal;
 
   submitOnce(form, async () => {
     try {
@@ -192,6 +207,11 @@ export function initPedidos() {
       closeModal('modal-pedido');
       toast('Salvo.');
       refresh();
+      if (aoSalvarExtra) {
+        const extra = aoSalvarExtra;
+        aoSalvarExtra = null;
+        extra();
+      }
     } catch (err) {
       toast(err.message === 'estoque_insuficiente'
         ? 'Estoque insuficiente nesse lote.'

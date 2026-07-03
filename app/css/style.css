@@ -332,6 +332,13 @@ select.form-input { appearance: none; }
   border-radius: 12px;
   padding: 10px;
   margin-bottom: 8px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.kanban-col.drop-alvo {
+  border-color: var(--primary);
+  outline: 2px dashed var(--primary);
+  outline-offset: -2px;
 }
 .kanban-card .title { font-size: 14px; font-weight: 600; }
 .kanban-card .sub { font-size: 11px; color: var(--text-muted); margin-top: 3px; }

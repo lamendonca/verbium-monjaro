@@ -7,9 +7,10 @@ import {
   listarClientes, recompraPorCliente, botaoWhatsApp, abrirDetalheCliente,
   estaPerdido, retomarCliente, PERDIDO_DIAS_VISIVEL,
 } from './clientes.js';
-import { listarPedidos } from './pedidos.js';
+import { listarPedidos, novoPedidoParaCliente } from './pedidos.js';
 import { estoqueLivre } from './compras.js';
 import { consolidado } from './financeiro.js';
+import { update } from './db.js';
 import {
   el, renderInto, loadingState, emptyState, errorState, fmtMoney, fmtData,
   parseDateLocal, hojeLocal, diffDias, toast,
@@ -48,16 +49,17 @@ function montarFunil(clientes, recompraMap, ultimoPedidoMap) {
     } else if (!p) {
       fases.nao_iniciada.push({ c, sub: 'novo — em negociação', urgencia: 1 });
     } else if (p.pagamento !== 'pago') {
-      fases.pendente.push({ c, sub: `${fmtMoney(p.valor)} · pedido de ${fmtData(p.data)}` });
+      fases.pendente.push({ c, p, sub: `${fmtMoney(p.valor)} · pedido de ${fmtData(p.data)}` });
     } else if (p.entrega !== 'entregue') {
-      fases.pago.push({ c, sub: `${fmtMoney(p.valor)} · pago, separar/entregar` });
+      fases.pago.push({ c, p, sub: `${fmtMoney(p.valor)} · pago, separar/entregar` });
     } else if (r?.status === 'atrasado' || r?.status === 'alerta') {
       const sub = r.status === 'atrasado'
         ? `recompra atrasada há ${Math.abs(r.dias_restantes)} dia(s)`
         : `recompra em ${r.dias_restantes} dia(s)`;
+      // sem `p`: arrastar pra uma fase de pedido abre um pedido NOVO (novo ciclo)
       fases.nao_iniciada.push({ c, sub, urgencia: r.status === 'atrasado' ? 0 : 2, whatsapp: true });
     } else {
-      fases.entregue.push({ c, sub: `entregue em ${fmtData(p.data)}`, data: p.data });
+      fases.entregue.push({ c, p, sub: `entregue em ${fmtData(p.data)}`, data: p.data });
     }
   }
   fases.nao_iniciada.sort((a, b) => (a.urgencia ?? 9) - (b.urgencia ?? 9));
@@ -65,7 +67,133 @@ function montarFunil(clientes, recompraMap, ultimoPedidoMap) {
   return fases;
 }
 
-function cardFunil({ c, sub, whatsapp, retomar }, onChanged) {
+// ---- Mover card (arrasto entre fases) ----
+// Cada movimento grava a mudança correspondente nos dados; movimentos sem
+// significado são recusados com aviso.
+async function moverCard(item, de, para, onChanged) {
+  const { c, p } = item;
+  try {
+    if (para === 'perdido') {
+      if (!confirm(`Marcar ${c.nome} como perdido? Ele sai dos alertas por enquanto.`)) return;
+      await marcarPerdido(c.id);
+      toast('Marcado como perdido.');
+      return onChanged();
+    }
+    if (para === 'nao_iniciada') {
+      if (de === 'perdido') {
+        await retomarCliente(c.id);
+        toast('De volta ao funil.');
+        return onChanged();
+      }
+      return toast('Essa volta é automática — o alerta de recompra reabre o ciclo.');
+    }
+    // Destino é fase de pedido. Sem pedido em aberto → novo pedido (novo ciclo).
+    if (!p) {
+      if (de === 'perdido') await retomarCliente(c.id);
+      return novoPedidoParaCliente(c.id, {
+        pagamento: para === 'pendente' ? 'pendente' : 'pago',
+        entrega: para === 'entregue' ? 'entregue' : 'aguardando',
+        onSave: onChanged,
+      });
+    }
+    const patch = {};
+    if (para === 'pendente') patch.pagamento = 'pendente';
+    if (para === 'pago') {
+      patch.pagamento = 'pago';
+      if (p.entrega === 'entregue') patch.entrega = 'separado'; // voltando da entrega
+    }
+    if (para === 'entregue') {
+      patch.pagamento = 'pago';
+      patch.entrega = 'entregue';
+    }
+    await update('pedidos', p.id, patch);
+    toast('Movido.');
+    onChanged();
+  } catch {
+    toast('Não consegui mover. Tenta de novo.');
+  }
+}
+
+// Long-press (250ms) levanta o card; antes disso o gesto rola a página/kanban.
+function tornarArrastavel(card, item, fase, onChanged) {
+  let timer = null;
+  let ghost = null;
+  let arrastando = false;
+  let alvo = null;
+  let sx = 0;
+  let sy = 0;
+
+  const limpar = () => {
+    clearTimeout(timer);
+    timer = null;
+    ghost?.remove();
+    ghost = null;
+    card.style.opacity = '';
+    document.querySelectorAll('.kanban-col.drop-alvo').forEach((col) => col.classList.remove('drop-alvo'));
+  };
+
+  card.addEventListener('contextmenu', (e) => {
+    if (arrastando || timer) e.preventDefault();
+  });
+  // Non-passive: precisa poder cancelar a rolagem enquanto arrasta (touch).
+  card.addEventListener('touchmove', (e) => {
+    if (arrastando) e.preventDefault();
+  }, { passive: false });
+
+  card.addEventListener('pointerdown', (e) => {
+    if (e.button) return;
+    sx = e.clientX;
+    sy = e.clientY;
+    timer = setTimeout(() => {
+      arrastando = true;
+      card.setPointerCapture(e.pointerId);
+      const r = card.getBoundingClientRect();
+      ghost = card.cloneNode(true);
+      Object.assign(ghost.style, {
+        position: 'fixed', left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`,
+        zIndex: 300, opacity: .92, pointerEvents: 'none', transform: 'rotate(2deg)',
+        boxShadow: '0 8px 24px rgba(0,0,0,.35)',
+      });
+      document.body.append(ghost);
+      card.style.opacity = .35;
+      navigator.vibrate?.(15);
+    }, 250);
+  });
+
+  card.addEventListener('pointermove', (e) => {
+    if (!arrastando) {
+      // moveu antes do long-press = rolagem, não arrasto
+      if (timer && Math.hypot(e.clientX - sx, e.clientY - sy) > 8) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      return;
+    }
+    ghost.style.left = `${e.clientX - ghost.offsetWidth / 2}px`;
+    ghost.style.top = `${e.clientY - 20}px`;
+    const col = document.elementFromPoint(e.clientX, e.clientY)?.closest('.kanban-col');
+    document.querySelectorAll('.kanban-col.drop-alvo').forEach((c2) => c2.classList.remove('drop-alvo'));
+    alvo = col?.dataset.fase || null;
+    if (col && alvo !== fase) col.classList.add('drop-alvo');
+  });
+
+  const soltar = () => {
+    const estava = arrastando;
+    arrastando = false;
+    limpar();
+    if (estava) {
+      card.dataset.arrastou = '1'; // suprime o clique que fecha o gesto
+      setTimeout(() => delete card.dataset.arrastou, 300);
+      if (alvo && alvo !== fase) moverCard(item, fase, alvo, onChanged);
+    }
+    alvo = null;
+  };
+  card.addEventListener('pointerup', soltar);
+  card.addEventListener('pointercancel', soltar);
+}
+
+function cardFunil(item, fase, onChanged) {
+  const { c, sub, whatsapp, retomar } = item;
   const acoes = [];
   if (whatsapp) acoes.push(botaoWhatsApp(c.nome, c.contato));
   if (retomar) {
@@ -79,24 +207,25 @@ function cardFunil({ c, sub, whatsapp, retomar }, onChanged) {
       },
     }, 'Retomar'));
   }
-  return el('div', {
-    class: 'kanban-card',
-    style: 'cursor:pointer',
-    onclick: () => abrirDetalheCliente(c, { onChanged }),
-  },
+  const card = el('div', { class: 'kanban-card', style: 'cursor:grab' },
     el('div', { class: 'title' }, c.nome),
     el('div', { class: 'sub' }, sub),
     // stopPropagation: ações não devem abrir o detalhe do cliente junto.
     acoes.length
       ? el('div', { class: 'acao', style: 'display:flex; gap:6px', onclick: (e) => e.stopPropagation() }, acoes)
       : null);
+  card.addEventListener('click', () => {
+    if (!card.dataset.arrastou) abrirDetalheCliente(c, { onChanged });
+  });
+  tornarArrastavel(card, item, fase, onChanged);
+  return card;
 }
 
-function colunaFunil(titulo, cards, onChanged) {
-  return el('div', { class: 'kanban-col' },
+function colunaFunil(titulo, fase, cards, onChanged) {
+  return el('div', { class: 'kanban-col', 'data-fase': fase },
     el('div', { class: 'col-title' }, titulo, el('span', { class: 'count' }, cards.length)),
     cards.length
-      ? cards.map((card) => cardFunil(card, onChanged))
+      ? cards.map((card) => cardFunil(card, fase, onChanged))
       : el('div', { class: 'vazio' }, '—'));
 }
 
@@ -126,11 +255,11 @@ export function initInicio() {
       const recompraMap = new Map(recompra.map((r) => [r.cliente_id, r]));
       const fases = montarFunil(clientes, recompraMap, ultimoPedidoMap);
       renderInto(funilEl, [
-        colunaFunil('Não iniciada', fases.nao_iniciada, refresh),
-        colunaFunil('Pendente pagamento', fases.pendente, refresh),
-        colunaFunil('Pago', fases.pago, refresh),
-        colunaFunil('Entregue medicação', fases.entregue, refresh),
-        colunaFunil('Perdido', fases.perdido, refresh),
+        colunaFunil('Não iniciada', 'nao_iniciada', fases.nao_iniciada, refresh),
+        colunaFunil('Pendente pagamento', 'pendente', fases.pendente, refresh),
+        colunaFunil('Pago', 'pago', fases.pago, refresh),
+        colunaFunil('Entregue medicação', 'entregue', fases.entregue, refresh),
+        colunaFunil('Perdido', 'perdido', fases.perdido, refresh),
       ]);
 
       // Perdidos ficam fora dos alertas até novo pedido ou retomada.

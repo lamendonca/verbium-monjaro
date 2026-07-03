@@ -140,6 +140,17 @@ Fases **derivadas** dos dados — nenhum estado extra persistido. Por cliente at
 - Fica na coluna Perdido por `PERDIDO_DIAS_VISIVEL = 14` dias (constante em `clientes.js`); depois some do funil, mas continua fora dos alertas.
 - Volta ao ciclo com **novo pedido** (pedido com data posterior a `perdido_em` anula o perdido — sem write extra) ou pelo botão **Retomar** (limpa `perdido_em`).
 
+**Arrasto (long-press de 250ms no card)** — cada movimento grava a mudança correspondente:
+| Movimento | Efeito |
+|---|---|
+| qualquer → Perdido | `marcarPerdido` (com confirmação) |
+| Perdido → Não iniciada | `retomarCliente` |
+| Pendente → Pago | último pedido `pagamento = pago` |
+| Pago/Pendente → Entregue | `pagamento = pago` + `entrega = entregue` |
+| Pago → Pendente · Entregue → Pago | correções (reverte pagamento / entrega → `separado`) |
+| Não iniciada/Perdido → fase de pedido | abre **novo pedido** pré-preenchido (novo ciclo); salvar conclui o movimento |
+| qualquer → Não iniciada | recusado — volta é automática (recompra) ou via Retomar |
+
 ## 7. Datas e fuso
 
 - Datas de negócio são **dia** (`DATE`), comparadas no fuso local do dispositivo (operador único, no Brasil).
