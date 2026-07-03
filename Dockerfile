@@ -1,4 +1,4 @@
-# Monjaro — imagem estática auto-contida para deploy (VPS/painel).
+# Mounjaro — imagem estática auto-contida para deploy (VPS/painel).
 # Runtime idêntico ao docker-compose local: nginx:alpine servindo app/ na
 # porta 8080, com env.js gerado no boot a partir das variáveis de ambiente
 # (SUPABASE_URL, SUPABASE_ANON_KEY, APP_TOKEN, ENV).

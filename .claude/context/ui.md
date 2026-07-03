@@ -1,4 +1,4 @@
-# Interface — telas e fluxos (Monjaro)
+# Interface — telas e fluxos (Mounjaro)
 
 Especificação das telas para implementação. Mobile-first, 1 `app/index.html`, navegação por troca de `.page.active` (sem router). Tokens e componentes em `brand.md`. Regras de cálculo em `business-rules.md`.
 
@@ -6,7 +6,7 @@ Especificação das telas para implementação. Mobile-first, 1 `app/index.html`
 
 ```
 ┌───────────────────────────┐
-│ HEADER (sticky)           │  título "Gestão Monjaro" + subtítulo
+│ HEADER (sticky)           │  título "Gestão Mounjaro" + subtítulo
 ├───────────────────────────┤
 │                           │
 │  PÁGINA ATIVA (scroll)    │  só uma .page visível por vez

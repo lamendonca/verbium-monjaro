@@ -1,13 +1,13 @@
-# CLAUDE.md — Monjaro
+# CLAUDE.md — Mounjaro
 
-Aplicação pessoal de gestão de vendas de Monjaro. Controla clientes, pedidos, lotes de compra, estoque e financeiro, com alertas de recompra. Uso exclusivo do operador — **sem multi-tenant, sem Supabase Auth**.
+Aplicação pessoal de gestão de vendas de Mounjaro. Controla clientes, pedidos, lotes de compra, estoque e financeiro, com alertas de recompra. Uso exclusivo do operador — **sem multi-tenant, sem Supabase Auth**.
 
 > **Leia este arquivo antes de qualquer tarefa.** Ele é a fonte da verdade do projeto e prevalece sobre o framework herdado em `.claude/context/framework.md`. Detalhes em `.claude/context/*`.
 
 ## Contexto
 
 - **Quem usa**: o próprio operador, pelo **celular**, sempre. Mobile first não é preferência — é requisito.
-- **Domínio**: revende Monjaro para amigos. Vende ~50 unidades por ciclo; precisa comprar ≥ 20 por lote para a compra ser viável.
+- **Domínio**: revende Mounjaro para amigos. Vende ~50 unidades por ciclo; precisa comprar ≥ 20 por lote para a compra ser viável.
 - **O que controla**: clientes (nome, contato, frequência de recompra em dias), pedidos, compras ao fornecedor (lotes), estoque por lote e financeiro (lucro por lote e por cliente).
 - **O que NÃO faz**: não é multi-usuário, não cadastra dose por apresentação (produto único — 1 unidade de 4ml). Mensagens automáticas existem **só** no Follow-up agendado (via Evolution API + pg_cron — `business-rules.md` §6); alertas de recompra continuam manuais (abrem o WhatsApp).
 
@@ -130,8 +130,8 @@ Perguntar **uma vez** com as opções mapeadas — não implementar suposição.
 ## Estado atual
 
 ### Specs (concluído nesta convergência)
-- [x] CLAUDE.md convergido do chat-export para o Monjaro
-- [x] `.claude/context/*` reescrito para o Monjaro (framework, architecture, data-model, brand, ui, business-rules, decisions, operations, security, workflow)
+- [x] CLAUDE.md convergido do chat-export para o Mounjaro
+- [x] `.claude/context/*` reescrito para o Mounjaro (framework, architecture, data-model, brand, ui, business-rules, decisions, operations, security, workflow)
 - [x] Esqueleto de pastas + `.env.example` + `.gitignore` + `docker-compose.yml` + `nginx/nginx.conf`
 - [x] `sql/001_schema.sql` (clientes, compras, pedidos + índices + views)
 - [x] Stubs de `app/` (index.html, css/style.css, js/* com docblocks de spec)

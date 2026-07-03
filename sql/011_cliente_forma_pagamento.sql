@@ -1,5 +1,5 @@
 -- =====================================================================
--- Monjaro — forma de pagamento preferida do cliente (pix | cartao).
+-- Mounjaro — forma de pagamento preferida do cliente (pix | cartao).
 -- Registrada no perfil para apoiar a negociação. Validada na aplicação.
 -- Idempotente.
 -- =====================================================================

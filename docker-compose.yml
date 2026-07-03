@@ -1,4 +1,4 @@
-# Monjaro — nginx servindo o app estático + injeção de env no boot.
+# Mounjaro — nginx servindo o app estático + injeção de env no boot.
 # Estado vive no Supabase; container é descartável (sem volumes persistentes).
 services:
   web:

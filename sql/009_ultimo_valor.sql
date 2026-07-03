@@ -1,5 +1,5 @@
 -- =====================================================================
--- Monjaro — valor da última venda por cliente (apoio à negociação).
+-- Mounjaro — valor da última venda por cliente (apoio à negociação).
 -- Derivado dos pedidos (nada digitado): v_cliente_recompra ganha a coluna
 -- ultimo_valor, com o valor do pedido mais recente do cliente.
 -- Idempotente.

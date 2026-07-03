@@ -1,4 +1,4 @@
-# Design system — Monjaro
+# Design system — Mounjaro
 
 App pessoal, **não** institucional. Não há marca corporativa a respeitar — a identidade é a do próprio app: **dark mode roxo, mobile-first, limpo**. Estes tokens vêm do protótipo aprovado no chat e são a referência para `app/css/style.css`.
 
@@ -79,7 +79,7 @@ body {
 
 ### Header
 - `position: sticky; top: 0`, gradiente `linear-gradient(135deg, var(--primary), var(--card2))`.
-- Título (ex.: "Gestão Monjaro") + subtítulo curto em `rgba(255,255,255,.7)`.
+- Título (ex.: "Gestão Mounjaro") + subtítulo curto em `rgba(255,255,255,.7)`.
 
 ### Bottom navigation (5 abas)
 - `position: fixed; bottom: 0`, fundo `var(--card)`, borda-topo `var(--border)`.

@@ -1,4 +1,4 @@
-# Regras de negócio — Monjaro
+# Regras de negócio — Mounjaro
 
 Lógica do domínio: alertas de recompra, estoque por lote, lucro e WhatsApp. Substitui o antigo `discovery.md` (que era varredura de rede do projeto herdado e não se aplica aqui). Esta é a "inteligência" do app — implementar exatamente como descrito para os cálculos baterem.
 
@@ -113,7 +113,7 @@ link   = https://wa.me/<numero>?text=<texto>
 
 **Mensagem padrão de recompra** (ajustável; manter curto e pessoal):
 ```
-Oi <nome>! Passando pra ver se você já vai querer repor o Monjaro. 😊
+Oi <nome>! Passando pra ver se você já vai querer repor o Mounjaro. 😊
 ```
 
 - Botão WhatsApp aparece no card do cliente e em cada alerta do Início.

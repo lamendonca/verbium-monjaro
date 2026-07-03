@@ -1,5 +1,5 @@
 -- =====================================================================
--- Monjaro — policies RLS para o role anon (estratégia simples do MVP).
+-- Mounjaro — policies RLS para o role anon (estratégia simples do MVP).
 -- Decisão registrada em .claude/context/decisions.md (ADR: RLS anon gate).
 -- O acesso ao app é protegido pelo APP_TOKEN + URL não pública; quem tiver
 -- a anon key acessa os dados — aceito conscientemente para o MVP.

@@ -1,5 +1,5 @@
 -- =====================================================================
--- Monjaro — schema inicial
+-- Mounjaro — schema inicial
 -- Aplicar no Supabase (SQL Editor) ou via MCP apply_migration.
 -- Idempotente (IF NOT EXISTS / CREATE OR REPLACE). Fonte: data-model.md.
 -- Lembre de expor o schema `monjaro` na API: Settings → API → Exposed schemas.

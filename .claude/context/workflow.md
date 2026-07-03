@@ -1,6 +1,6 @@
-# Workflow de desenvolvimento — Monjaro
+# Workflow de desenvolvimento — Mounjaro
 
-Convenção de branches, commits e merges. Aplicável por Claude em cada feature. Herdado do framework original e adaptado aos escopos do Monjaro.
+Convenção de branches, commits e merges. Aplicável por Claude em cada feature. Herdado do framework original e adaptado aos escopos do Mounjaro.
 
 > Nota: o projeto ainda **não é um repositório git** (`git init` quando for versionar). Até lá, "branch/merge" não se aplica; commits semânticos passam a valer no primeiro `git init`.
 

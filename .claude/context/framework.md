@@ -1,14 +1,14 @@
-# Framework de desenvolvimento — Monjaro
+# Framework de desenvolvimento — Mounjaro
 
-Derivado de um framework interno de outro projeto (varredura de TI em Python/SQL Server). As adaptações abaixo **prevalecem** sobre aquele framework original. Em caso de conflito, o `CLAUDE.md` do Monjaro tem a palavra final.
+Derivado de um framework interno de outro projeto (varredura de TI em Python/SQL Server). As adaptações abaixo **prevalecem** sobre aquele framework original. Em caso de conflito, o `CLAUDE.md` do Mounjaro tem a palavra final.
 
-> Marcador `[orig]` = princípio herdado mantido. As tabelas "original → Monjaro" mostram o que foi adaptado.
+> Marcador `[orig]` = princípio herdado mantido. As tabelas "original → Mounjaro" mostram o que foi adaptado.
 
 ---
 
 ## 1. Filosofia
 
-| Princípio | Aplicação no Monjaro |
+| Princípio | Aplicação no Mounjaro |
 |---|---|
 | **Simples funciona** `[orig]` | HTML/CSS/JS vanilla — sem framework JS, sem bundler, sem transpilador no MVP. |
 | **Previsível > esperto** `[orig]` | Sem abstrações desnecessárias. Código legível por quem não é especialista em JS moderno. |
@@ -20,7 +20,7 @@ Derivado de um framework interno de outro projeto (varredura de TI em Python/SQL
 
 ## 2. Stack
 
-| Camada | Framework original | Monjaro (adaptado) |
+| Camada | Framework original | Mounjaro (adaptado) |
 |---|---|---|
 | Linguagem | Python 3.12 | **JS vanilla (ES modules)** |
 | API/Backend | FastAPI + uvicorn | **Supabase JS client direto** (sem backend próprio) |
@@ -223,7 +223,7 @@ Perguntar **uma vez** com as opções mapeadas — não implementar suposição.
 
 ## 10. Decisões recorrentes
 
-| Decisão | Resposta padrão Monjaro |
+| Decisão | Resposta padrão Mounjaro |
 |---|---|
 | ORM ou queries diretas? | Supabase JS client via `app/js/db.js` — sem ORM. |
 | Autenticação? | `APP_TOKEN` no `.env` — sem Supabase Auth. |

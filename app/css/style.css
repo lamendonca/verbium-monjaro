@@ -1,4 +1,4 @@
-/* Monjaro — design tokens + componentes. Contrato visual em brand.md.
+/* Mounjaro — design tokens + componentes. Contrato visual em brand.md.
    Dois temas via html[data-theme]: claro (padrão) e escuro (paleta Dracula).
    O tema é aplicado antes do primeiro paint por um script inline no <head>. */
 

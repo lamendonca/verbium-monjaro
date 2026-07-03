@@ -1,4 +1,4 @@
-# Operação — Monjaro
+# Operação — Mounjaro
 
 Setup do Supabase, configuração de `.env`, build/run com Docker, deploy e troubleshooting. Estado vive **só** no Supabase — o container é descartável.
 
