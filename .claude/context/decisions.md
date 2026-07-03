@@ -80,6 +80,17 @@ Data base: 2026-06-12
 
 ---
 
+## ADR-011 — RLS: policies abertas para `anon` (MVP consciente)
+
+**Data**: 2026-07-03
+**Contexto**: RLS estava em default deny (ADR-003 delega a defesa dos dados à RLS). Era preciso escolher entre Edge Function + `service_role` (recomendação do `security.md`) e o gate simples.
+**Decisão**: caminho simples do MVP — policies `anon_all` (`USING (true)`) nas 3 tabelas, via `sql/002_rls_policies_anon.sql`, aplicada no projeto `mendonca`.
+**Mitigações**: GRANT ao `anon` só de `SELECT/INSERT/UPDATE` — **sem DELETE**, o que torna o soft delete garantia física no banco; acesso ao app segue atrás do `APP_TOKEN` + URL não pública.
+**Risco aceito**: quem obtiver a anon key lê/escreve os dados (PII de clientes). Aceito temporariamente pelo operador para destravar o uso.
+**Revisão**: migrar para Edge Function + `service_role` antes de expor o app publicamente ou se houver qualquer sinal de acesso indevido (monitorar logs no dashboard).
+
+---
+
 ## Pendências / decisões adiadas
 
 - **Pagamento parcial com valor**: hoje `parcial` conta como "a receber" inteiro. Se precisar do valor pago exato, adicionar `valor_pago` em migration `002`. Não implementar antes de pedido.

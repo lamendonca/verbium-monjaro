@@ -148,8 +148,8 @@ Perguntar **uma vez** com as opções mapeadas — não implementar suposição.
 - [x] `docker compose up` validado servindo o app (nginx não-root, porta 8080 interna)
 - [x] Schema aplicado no Supabase real (projeto `mendonca` / lfvjefvbxyrzediqcurt, migration `monjaro_001_schema`; RLS ligada nas 3 tabelas)
 - [x] `.env` com credenciais reais (URL + anon key do mendonca, APP_TOKEN gerado)
-- [ ] Policies RLS definidas (estratégia em `security.md`) — sem elas o app não lê/escreve
-- [ ] Expor schema `monjaro` na API (Dashboard → Settings → API → Exposed schemas)
+- [x] Policies RLS: gate simples `anon` (ADR-011; `sql/002` + `sql/003` — anon sem DELETE/TRUNCATE)
+- [x] Schema `monjaro` exposto na API (verificado via REST: select/insert/update ok, delete 42501)
 
 > Estrutura: além dos módulos spec'ados existem `app/js/ui.js` (helpers de
 > apresentação compartilhados) e `app/js/inicio.js` (dashboard — compõe
