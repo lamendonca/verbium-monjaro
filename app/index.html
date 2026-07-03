@@ -65,6 +65,7 @@
         <div class="form-group">
           <input type="search" id="busca-clientes" class="form-input" placeholder="Buscar por nome...">
         </div>
+        <div id="filtro-clientes" style="margin:-6px 0 10px"></div>
         <div id="lista-clientes"></div>
       </section>
 
@@ -158,13 +159,23 @@
           </div>
         </div>
         <div class="form-hint" style="margin:-6px 0 14px">A partir da 2ª compra, o ritmo real do cliente é calculado automaticamente e vale mais que a estimativa.</div>
-        <div class="form-group">
-          <label class="form-label" for="cliente-origem">Origem</label>
-          <select class="form-input" id="cliente-origem">
-            <option value="">—</option>
-            <option value="maysa">Maysa</option>
-            <option value="lucas">Lucas</option>
-          </select>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="cliente-origem">Origem</label>
+            <select class="form-input" id="cliente-origem">
+              <option value="">—</option>
+              <option value="maysa">Maysa</option>
+              <option value="lucas">Lucas</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="cliente-forma-pagamento">Pagamento</label>
+            <select class="form-input" id="cliente-forma-pagamento">
+              <option value="">—</option>
+              <option value="pix">Pix</option>
+              <option value="cartao">Cartão</option>
+            </select>
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label" for="cliente-anotacao">Anotação</label>

@@ -85,6 +85,10 @@ const rotuloOrigem = { maysa: 'Maysa', lucas: 'Lucas' };
 const badgeOrigem = (origem) =>
   origem ? el('span', { class: 'badge badge-purple' }, rotuloOrigem[origem] || origem) : null;
 
+const rotuloPagamento = { pix: 'Pix', cartao: 'Cartão' };
+const badgeFormaPagamento = (forma) =>
+  forma ? el('span', { class: 'badge badge-gray' }, rotuloPagamento[forma] || forma) : null;
+
 export function botaoWhatsApp(nome, contato) {
   const link = whatsappLink(nome, contato);
   return el('button', {
@@ -95,7 +99,18 @@ export function botaoWhatsApp(nome, contato) {
   }, 'WhatsApp');
 }
 
-function itemCliente(cliente, recompra, onEdit, onDetalhe) {
+// Torna um badge clicável para virar filtro da lista (tela Clientes).
+function tagFiltravel(node, filtro, onTag) {
+  if (!node || !onTag) return node;
+  node.style.cursor = 'pointer';
+  node.addEventListener('click', (e) => {
+    e.stopPropagation(); // não abrir o detalhe junto
+    onTag(filtro);
+  });
+  return node;
+}
+
+function itemCliente(cliente, recompra, onEdit, onDetalhe, onTag) {
   const [cls, label] = badgeStatus[recompra?.status || 'sem_pedido'];
   const ultimo = recompra?.ultimo_pedido ? ` · último ${fmtData(recompra.ultimo_pedido)}` : '';
   // Frequência efetiva vem da view; se calculada do histórico, sinalizar.
@@ -109,9 +124,16 @@ function itemCliente(cliente, recompra, onEdit, onDetalhe) {
       el('div', { class: 'title' }, cliente.nome),
       el('div', { class: 'sub' }, `${freq}${ultimo}${ultimaVenda}${cliente.dose ? ` · ${cliente.dose}` : ''}`),
       el('div', { class: 'badges' },
-        el('span', { class: `badge ${cls}` }, label),
-        badgeOrigem(cliente.origem),
-        perdido ? el('span', { class: 'badge badge-red' }, 'Perdido') : null)),
+        tagFiltravel(el('span', { class: `badge ${cls}` }, label),
+          { tipo: 'status', valor: recompra?.status || 'sem_pedido', rotulo: label }, onTag),
+        tagFiltravel(badgeOrigem(cliente.origem),
+          { tipo: 'origem', valor: cliente.origem, rotulo: rotuloOrigem[cliente.origem] || cliente.origem }, onTag),
+        tagFiltravel(badgeFormaPagamento(cliente.forma_pagamento),
+          { tipo: 'pagamento', valor: cliente.forma_pagamento, rotulo: rotuloPagamento[cliente.forma_pagamento] || cliente.forma_pagamento }, onTag),
+        perdido
+          ? tagFiltravel(el('span', { class: 'badge badge-red' }, 'Perdido'),
+              { tipo: 'perdido', rotulo: 'Perdido' }, onTag)
+          : null)),
     el('div', { class: 'actions' },
       botaoWhatsApp(cliente.nome, cliente.contato),
       el('button', { class: 'btn btn-outline btn-sm', onclick: () => onEdit(cliente) }, 'Editar')));
@@ -185,6 +207,7 @@ export async function abrirDetalheCliente(cliente, { onEditar, onChanged } = {})
       el('div', { class: 'badges', style: 'display:flex; gap:6px; margin:10px 0 14px; flex-wrap:wrap' },
         el('span', { class: `badge ${cls}` }, label),
         badgeOrigem(cliente.origem),
+        badgeFormaPagamento(cliente.forma_pagamento),
         perdido ? el('span', { class: 'badge badge-red' }, `Perdido em ${fmtData(cliente.perdido_em)}`) : null),
       typeof cliente.anotacao === 'string' && cliente.anotacao.trim() && cliente.anotacao !== 'null'
         ? el('div', {
@@ -238,11 +261,14 @@ export function initClientes() {
     frequencia: document.getElementById('cliente-frequencia'),
     dose: document.getElementById('cliente-dose'),
     origem: document.getElementById('cliente-origem'),
+    formaPagamento: document.getElementById('cliente-forma-pagamento'),
     anotacao: document.getElementById('cliente-anotacao'),
     valorNegociacao: document.getElementById('cliente-valor-negociacao'),
   };
   const btnRemover = document.getElementById('btn-remover-cliente');
+  const filtroEl = document.getElementById('filtro-clientes');
   let cache = { clientes: [], recompra: new Map() };
+  let filtroTag = null; // { tipo: status|origem|perdido, valor, rotulo }
 
   function abrirModal(cliente) {
     form.reset();
@@ -252,6 +278,7 @@ export function initClientes() {
     campos.frequencia.value = cliente?.frequencia ?? '';
     campos.dose.value = cliente?.dose || '';
     campos.origem.value = cliente?.origem || '';
+    campos.formaPagamento.value = cliente?.forma_pagamento || '';
     campos.anotacao.value = cliente?.anotacao || '';
     campos.valorNegociacao.value = cliente?.valor_negociacao ?? '';
     document.getElementById('modal-cliente-titulo').textContent = cliente ? 'Editar cliente' : 'Novo cliente';
@@ -259,15 +286,37 @@ export function initClientes() {
     openModal('modal-cliente');
   }
 
+  function aplicarFiltroTag(c) {
+    if (!filtroTag) return true;
+    const r = cache.recompra.get(c.id);
+    if (filtroTag.tipo === 'origem') return c.origem === filtroTag.valor;
+    if (filtroTag.tipo === 'pagamento') return c.forma_pagamento === filtroTag.valor;
+    if (filtroTag.tipo === 'perdido') return estaPerdido(c, r?.ultimo_pedido);
+    return (r?.status || 'sem_pedido') === filtroTag.valor;
+  }
+
+  function renderChipFiltro() {
+    renderInto(filtroEl, filtroTag
+      ? [el('button', {
+          class: 'tab active',
+          onclick: () => { filtroTag = null; render(); },
+        }, `${filtroTag.rotulo} ✕`)]
+      : []);
+  }
+
   function render() {
+    renderChipFiltro();
     const termo = busca.value.trim().toLowerCase();
-    const filtrados = cache.clientes.filter((c) => c.nome.toLowerCase().includes(termo));
+    const filtrados = cache.clientes
+      .filter((c) => c.nome.toLowerCase().includes(termo))
+      .filter(aplicarFiltroTag);
     if (!filtrados.length) {
-      return emptyState(container, '👤', termo ? 'Nenhum cliente com esse nome.' : 'Nenhum cliente ainda. Toque em + para cadastrar.');
+      return emptyState(container, '👤', termo || filtroTag ? 'Nenhum cliente nesse filtro.' : 'Nenhum cliente ainda. Toque em + para cadastrar.');
     }
     renderInto(container, filtrados.map((c) => itemCliente(
       c, cache.recompra.get(c.id), abrirModal,
       (cli) => abrirDetalheCliente(cli, { onEditar: abrirModal, onChanged: refresh }),
+      (filtro) => { filtroTag = filtro; render(); },
     )));
   }
 
@@ -301,6 +350,7 @@ export function initClientes() {
         frequencia: campos.frequencia.value ? Number(campos.frequencia.value) : null,
         dose: campos.dose.value.trim() || null,
         origem: campos.origem.value || null,
+        forma_pagamento: campos.formaPagamento.value || null,
         anotacao: campos.anotacao.value.trim() || null,
         valor_negociacao: campos.valorNegociacao.value ? Number(campos.valorNegociacao.value) : null,
       });

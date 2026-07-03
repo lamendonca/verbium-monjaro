@@ -39,7 +39,8 @@ Quem compra. Cadastro mínimo (decisão do operador: só nome, contato e frequê
 | `negociacao_em` | DATE NULL | retomada manual de negociação no funil (migration `006`) |
 | `origem` | TEXT NULL | quem trouxe o cliente: `maysa` · `lucas` (migration `008`) |
 | `anotacao` | TEXT NULL | anotação livre do operador (migration `008`) |
-| `valor_negociacao` | NUMERIC(10,2) NULL | preço da negociação em andamento, editado no detalhe (migration `010`) |
+| `valor_negociacao` | NUMERIC(10,2) NULL | preço da negociação em andamento (migration `010`) |
+| `forma_pagamento` | TEXT NULL | preferência do cliente: `pix` · `cartao` (migration `011`) |
 | `is_active` | BOOLEAN NOT NULL DEFAULT true | soft delete |
 | `created_at` | TIMESTAMPTZ DEFAULT NOW() | |
 | `updated_at` | TIMESTAMPTZ DEFAULT NOW() | trigger |
