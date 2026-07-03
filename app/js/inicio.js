@@ -5,7 +5,7 @@
 
 import {
   listarClientes, recompraPorCliente, botaoWhatsApp, abrirDetalheCliente,
-  estaPerdido, retomarCliente, marcarNegociacao, PERDIDO_DIAS_VISIVEL,
+  estaPerdido, marcarPerdido, retomarCliente, marcarNegociacao, PERDIDO_DIAS_VISIVEL,
 } from './clientes.js';
 import { listarPedidos, novoPedidoParaCliente, removerPedido } from './pedidos.js';
 import { estoqueLivre } from './compras.js';
