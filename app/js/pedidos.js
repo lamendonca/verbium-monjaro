@@ -9,6 +9,7 @@ import { listarLotes } from './compras.js';
 import {
   el, renderInto, loadingState, emptyState, errorState,
   fmtMoney, fmtData, hojeISO, openModal, closeModal, toast,
+  submitOnce, onClickOnce,
 } from './ui.js';
 
 const SELECT_PEDIDO = '*, cliente:cliente_id(nome), lote:compra_id(referencia, data)';
@@ -175,8 +176,7 @@ export function initPedidos() {
 
   document.getElementById('btn-novo-pedido').addEventListener('click', () => abrirModal(null));
 
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
+  submitOnce(form, async () => {
     try {
       await salvarPedido({
         id: campos.id.value || undefined,
@@ -199,7 +199,7 @@ export function initPedidos() {
     }
   });
 
-  btnRemover.addEventListener('click', async () => {
+  onClickOnce(btnRemover, async () => {
     if (!emEdicao) return;
     if (!confirm('Remover este pedido? Ele sai das listas e o estoque volta ao lote.')) return;
     try {

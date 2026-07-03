@@ -5,6 +5,7 @@ import { list, insert, update, softDelete, listView } from './db.js';
 import {
   el, renderInto, loadingState, emptyState, errorState,
   fmtData, parseDateLocal, hojeLocal, diffDias, openModal, closeModal, toast,
+  submitOnce, onClickOnce,
 } from './ui.js';
 
 export const listarClientes = () => list('clientes', { order: 'nome' });
@@ -136,8 +137,7 @@ export function initClientes() {
   busca.addEventListener('input', render);
   document.getElementById('btn-novo-cliente').addEventListener('click', () => abrirModal(null));
 
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
+  submitOnce(form, async () => {
     try {
       await salvarCliente({
         id: campos.id.value || undefined,
@@ -154,7 +154,7 @@ export function initClientes() {
     }
   });
 
-  btnRemover.addEventListener('click', async () => {
+  onClickOnce(btnRemover, async () => {
     if (!confirm(`Remover ${campos.nome.value}? Ele sai das listas, mas o histórico continua.`)) return;
     try {
       await softDelete('clientes', campos.id.value);

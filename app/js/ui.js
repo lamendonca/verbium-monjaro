@@ -75,6 +75,37 @@ document.addEventListener('click', (e) => {
   if (e.target.classList?.contains('modal-overlay')) e.target.classList.remove('open');
 });
 
+// ---- Guardas de duplo-clique ----
+// Submit assíncrono: cliques durante o await disparariam novos inserts.
+// Ignora reentradas e desabilita os botões do form enquanto o handler roda.
+export function submitOnce(form, handler) {
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (form.dataset.busy) return;
+    form.dataset.busy = '1';
+    const botoes = [...form.querySelectorAll('button')];
+    botoes.forEach((b) => { b.disabled = true; });
+    try {
+      await handler(e);
+    } finally {
+      delete form.dataset.busy;
+      botoes.forEach((b) => { b.disabled = false; });
+    }
+  });
+}
+
+export function onClickOnce(botao, handler) {
+  botao.addEventListener('click', async () => {
+    if (botao.disabled) return;
+    botao.disabled = true;
+    try {
+      await handler();
+    } finally {
+      botao.disabled = false;
+    }
+  });
+}
+
 // ---- Toast curto ("Salvo.") ----
 export function toast(msg) {
   const t = el('div', { class: 'card' }, msg);

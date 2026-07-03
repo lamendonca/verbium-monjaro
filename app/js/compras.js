@@ -6,6 +6,7 @@ import { list, insert, update, softDelete } from './db.js';
 import {
   el, renderInto, loadingState, emptyState, errorState,
   fmtMoney, fmtData, hojeISO, openModal, closeModal, toast,
+  submitOnce, onClickOnce,
 } from './ui.js';
 
 export const LOTE_MINIMO = 20;
@@ -104,8 +105,7 @@ export function initCompras() {
 
   document.getElementById('btn-novo-lote').addEventListener('click', () => abrirModal(null));
 
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
+  submitOnce(form, async () => {
     try {
       await salvarLote({
         id: campos.id.value || undefined,
@@ -124,7 +124,7 @@ export function initCompras() {
     }
   });
 
-  btnRemover.addEventListener('click', async () => {
+  onClickOnce(btnRemover, async () => {
     const ref = campos.referencia.value || 'este lote';
     if (!confirm(`Remover ${ref}? Ele sai das listas, mas o histórico continua.`)) return;
     try {
