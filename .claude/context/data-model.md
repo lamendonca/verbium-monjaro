@@ -133,7 +133,8 @@ GROUP BY c.id;
 -- manual) + próxima recompra. Redefinida na migration 004 — ver
 -- sql/004_frequencia_calculada.sql para o SQL vigente.
 -- Colunas: cliente_id, nome, contato, frequencia, ultimo_pedido,
---          proxima_recompra, compras
+--          proxima_recompra, compras, ultimo_valor (migration 009 —
+--          valor da última venda, apoio à negociação)
 ```
 
 > O cálculo do **status** do alerta (`atrasado`/`alerta`/`ok`) e do **lucro por cliente** pode ficar na aplicação (mais simples de iterar) ou virar view depois. Regra em `business-rules.md`.

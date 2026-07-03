@@ -102,11 +102,12 @@ function itemCliente(cliente, recompra, onEdit, onDetalhe) {
   const freq = recompra?.frequencia
     ? `a cada ${recompra.frequencia} dias${recompra.compras >= 2 ? ' (calculado)' : ' (estimado)'}`
     : 'ritmo a definir';
+  const ultimaVenda = recompra?.ultimo_valor != null ? ` · última ${fmtMoney(recompra.ultimo_valor)}` : '';
   const perdido = estaPerdido(cliente, recompra?.ultimo_pedido);
   return el('div', { class: 'list-item' },
     el('div', { class: 'info', style: 'cursor:pointer', onclick: () => onDetalhe(cliente) },
       el('div', { class: 'title' }, cliente.nome),
-      el('div', { class: 'sub' }, `${freq}${ultimo}${cliente.dose ? ` · ${cliente.dose}` : ''}`),
+      el('div', { class: 'sub' }, `${freq}${ultimo}${ultimaVenda}${cliente.dose ? ` · ${cliente.dose}` : ''}`),
       el('div', { class: 'badges' },
         el('span', { class: `badge ${cls}` }, label),
         badgeOrigem(cliente.origem),
@@ -192,7 +193,11 @@ export async function abrirDetalheCliente(cliente, { onEditar, onChanged } = {})
         el('div', { class: 'summary-card' },
           el('div', { class: 'label' }, 'Compras'), el('div', { class: 'value' }, pedidos.length)),
         el('div', { class: 'summary-card' },
-          el('div', { class: 'label' }, 'Total comprado'), el('div', { class: 'value' }, fmtMoney(total)))),
+          el('div', { class: 'label' }, 'Total comprado'), el('div', { class: 'value' }, fmtMoney(total))),
+        el('div', { class: 'summary-card' },
+          el('div', { class: 'label' }, 'Última venda'),
+          el('div', { class: 'value', style: 'color: var(--primary)' },
+            r?.ultimo_valor != null ? fmtMoney(r.ultimo_valor) : '—'))),
       el('div', { style: 'display:flex; gap:8px; margin-bottom:16px' },
         botaoWhatsApp(cliente.nome, cliente.contato),
         onEditar

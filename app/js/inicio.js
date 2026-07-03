@@ -89,13 +89,15 @@ function montarFunil(clientes, recompraMap, ultimoPedidoMap, followupMap) {
       fases.pago.push({ c, p, sub: `${fmtMoney(p.valor)} · pago, separar/entregar` });
     } else if (c.negociacao_em && c.negociacao_em >= p.data) {
       // retomada manual (arrasto): em negociação até sair novo pedido
-      fases.nao_iniciada.push({ c, sub: 'em negociação', urgencia: 1, whatsapp: true });
+      const ultima = r?.ultimo_valor != null ? ` · última ${fmtMoney(r.ultimo_valor)}` : '';
+      fases.nao_iniciada.push({ c, sub: `em negociação${ultima}`, urgencia: 1, whatsapp: true });
     } else if (r?.status === 'atrasado' || r?.status === 'alerta') {
-      const sub = r.status === 'atrasado'
+      const quando = r.status === 'atrasado'
         ? `recompra atrasada há ${Math.abs(r.dias_restantes)} dia(s)`
         : `recompra em ${r.dias_restantes} dia(s)`;
+      const ultima = r.ultimo_valor != null ? ` · última ${fmtMoney(r.ultimo_valor)}` : '';
       // sem `p`: arrastar pra uma fase de pedido abre um pedido NOVO (novo ciclo)
-      fases.nao_iniciada.push({ c, sub, urgencia: r.status === 'atrasado' ? 0 : 2, whatsapp: true });
+      fases.nao_iniciada.push({ c, sub: `${quando}${ultima}`, urgencia: r.status === 'atrasado' ? 0 : 2, whatsapp: true });
     } else {
       fases.entregue.push({ c, p, sub: `entregue em ${fmtData(p.data)}`, data: p.data });
     }
