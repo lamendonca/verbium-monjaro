@@ -44,6 +44,14 @@ export async function alertas() {
     .sort((a, b) => a.proxima_recompra.localeCompare(b.proxima_recompra));
 }
 
+// "+55 62 8300-9910" → "+556283009910"; "(62) 8300-9910" → "6283009910".
+// Mantém só o "+" inicial (se houver) e os dígitos.
+export function normalizarContato(valor) {
+  const s = valor.trim();
+  const digitos = s.replace(/\D/g, '');
+  return s.startsWith('+') ? `+${digitos}` : digitos;
+}
+
 export function whatsappLink(nome, contato) {
   let numero = (contato || '').replace(/\D/g, '');
   if (numero.length < 10) return null; // contato inválido — desabilitar botão
@@ -135,6 +143,12 @@ export function initClientes() {
   }
 
   busca.addEventListener('input', render);
+
+  // Normaliza ao colar/digitar (e de novo ao salvar, por garantia).
+  campos.contato.addEventListener('input', () => {
+    const normalizado = normalizarContato(campos.contato.value);
+    if (campos.contato.value !== normalizado) campos.contato.value = normalizado;
+  });
   document.getElementById('btn-novo-cliente').addEventListener('click', () => abrirModal(null));
 
   submitOnce(form, async () => {
@@ -142,7 +156,7 @@ export function initClientes() {
       await salvarCliente({
         id: campos.id.value || undefined,
         nome: campos.nome.value.trim(),
-        contato: campos.contato.value.trim(),
+        contato: normalizarContato(campos.contato.value),
         frequencia: campos.frequencia.value ? Number(campos.frequencia.value) : null,
         dose: campos.dose.value.trim() || null,
       });
