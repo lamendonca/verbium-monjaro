@@ -5,9 +5,9 @@
 
 import {
   listarClientes, recompraPorCliente, botaoWhatsApp, abrirDetalheCliente,
-  estaPerdido, retomarCliente, PERDIDO_DIAS_VISIVEL,
+  estaPerdido, retomarCliente, marcarNegociacao, PERDIDO_DIAS_VISIVEL,
 } from './clientes.js';
-import { listarPedidos, novoPedidoParaCliente } from './pedidos.js';
+import { listarPedidos, novoPedidoParaCliente, removerPedido } from './pedidos.js';
 import { estoqueLivre } from './compras.js';
 import { consolidado } from './financeiro.js';
 import { update } from './db.js';
@@ -52,6 +52,9 @@ function montarFunil(clientes, recompraMap, ultimoPedidoMap) {
       fases.pendente.push({ c, p, sub: `${fmtMoney(p.valor)} · pedido de ${fmtData(p.data)}` });
     } else if (p.entrega !== 'entregue') {
       fases.pago.push({ c, p, sub: `${fmtMoney(p.valor)} · pago, separar/entregar` });
+    } else if (c.negociacao_em && c.negociacao_em >= p.data) {
+      // retomada manual (arrasto): em negociação até sair novo pedido
+      fases.nao_iniciada.push({ c, sub: 'em negociação', urgencia: 1, whatsapp: true });
     } else if (r?.status === 'atrasado' || r?.status === 'alerta') {
       const sub = r.status === 'atrasado'
         ? `recompra atrasada há ${Math.abs(r.dias_restantes)} dia(s)`
@@ -82,10 +85,16 @@ async function moverCard(item, de, para, onChanged) {
     if (para === 'nao_iniciada') {
       if (de === 'perdido') {
         await retomarCliente(c.id);
-        toast('De volta ao funil.');
-        return onChanged();
+      } else if (p && (de === 'pendente' || de === 'pago')) {
+        // voltar pra negociação com pedido em aberto = cancelar o pedido
+        if (!confirm(`Voltar ${c.nome} pra negociação remove o pedido em aberto (estoque volta ao lote). Continuar?`)) return;
+        await removerPedido({ id: p.id, compra_id: p.compra_id, qtd: p.qtd });
+        await marcarNegociacao(c.id);
+      } else {
+        await marcarNegociacao(c.id);
       }
-      return toast('Essa volta é automática — o alerta de recompra reabre o ciclo.');
+      toast('Em negociação.');
+      return onChanged();
     }
     // Destino é fase de pedido. Sem pedido em aberto → novo pedido (novo ciclo).
     if (!p) {
@@ -114,11 +123,13 @@ async function moverCard(item, de, para, onChanged) {
   }
 }
 
-// Long-press (250ms) levanta o card; antes disso o gesto rola a página/kanban.
+// Mouse: arrasta direto (movimento > 5px). Touch: long-press curto (200ms)
+// pra não brigar com a rolagem do kanban.
 function tornarArrastavel(card, item, fase, onChanged) {
   let timer = null;
   let ghost = null;
   let arrastando = false;
+  let armado = null; // pointerdown de mouse aguardando movimento
   let alvo = null;
   let sx = 0;
   let sy = 0;
@@ -140,34 +151,44 @@ function tornarArrastavel(card, item, fase, onChanged) {
     if (arrastando) e.preventDefault();
   }, { passive: false });
 
+  const levantar = (pointerId) => {
+    arrastando = true;
+    card.setPointerCapture(pointerId);
+    const r = card.getBoundingClientRect();
+    ghost = card.cloneNode(true);
+    Object.assign(ghost.style, {
+      position: 'fixed', left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`,
+      zIndex: 300, opacity: .92, pointerEvents: 'none', transform: 'rotate(2deg)',
+      boxShadow: '0 8px 24px rgba(0,0,0,.35)',
+    });
+    document.body.append(ghost);
+    card.style.opacity = .35;
+    navigator.vibrate?.(15);
+  };
+
   card.addEventListener('pointerdown', (e) => {
     if (e.button) return;
     sx = e.clientX;
     sy = e.clientY;
-    timer = setTimeout(() => {
-      arrastando = true;
-      card.setPointerCapture(e.pointerId);
-      const r = card.getBoundingClientRect();
-      ghost = card.cloneNode(true);
-      Object.assign(ghost.style, {
-        position: 'fixed', left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`,
-        zIndex: 300, opacity: .92, pointerEvents: 'none', transform: 'rotate(2deg)',
-        boxShadow: '0 8px 24px rgba(0,0,0,.35)',
-      });
-      document.body.append(ghost);
-      card.style.opacity = .35;
-      navigator.vibrate?.(15);
-    }, 250);
+    if (e.pointerType === 'touch') {
+      timer = setTimeout(() => levantar(e.pointerId), 200);
+    } else {
+      armado = e.pointerId; // mouse: levanta no primeiro movimento real
+    }
   });
 
   card.addEventListener('pointermove', (e) => {
     if (!arrastando) {
-      // moveu antes do long-press = rolagem, não arrasto
-      if (timer && Math.hypot(e.clientX - sx, e.clientY - sy) > 8) {
+      const distancia = Math.hypot(e.clientX - sx, e.clientY - sy);
+      if (armado !== null && distancia > 5) {
+        levantar(armado);
+        armado = null;
+      } else if (timer && distancia > 8) {
+        // touch: moveu antes do long-press = rolagem, não arrasto
         clearTimeout(timer);
         timer = null;
       }
-      return;
+      if (!arrastando) return;
     }
     ghost.style.left = `${e.clientX - ghost.offsetWidth / 2}px`;
     ghost.style.top = `${e.clientY - 20}px`;
@@ -180,6 +201,7 @@ function tornarArrastavel(card, item, fase, onChanged) {
   const soltar = () => {
     const estava = arrastando;
     arrastando = false;
+    armado = null;
     limpar();
     if (estava) {
       card.dataset.arrastou = '1'; // suprime o clique que fecha o gesto

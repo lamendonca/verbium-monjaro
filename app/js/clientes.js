@@ -51,6 +51,11 @@ export function estaPerdido(cliente, ultimoPedidoISO) {
 export const marcarPerdido = (id) => update('clientes', id, { perdido_em: hojeISO() });
 export const retomarCliente = (id) => update('clientes', id, { perdido_em: null });
 
+// Retomada manual de negociação (arrasto pra "Não iniciada"). Um pedido
+// posterior encerra a negociação — derivado, sem write extra.
+export const marcarNegociacao = (id) =>
+  update('clientes', id, { negociacao_em: hojeISO(), perdido_em: null });
+
 // "+55 62 8300-9910" → "+556283009910"; "(62) 8300-9910" → "6283009910".
 // Mantém só o "+" inicial (se houver) e os dígitos.
 export function normalizarContato(valor) {
