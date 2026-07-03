@@ -119,12 +119,27 @@ Oi <nome>! Passando pra ver se você já vai querer repor o Monjaro. 😊
 - Botão WhatsApp aparece no card do cliente e em cada alerta do Início.
 - Validar que `contato` tem dígitos suficientes; se não, desabilitar o botão e sinalizar "contato inválido".
 
-## 6. Datas e fuso
+## 6. Funil de vendas (kanban do Início)
+
+Fases **derivadas** dos dados — nenhum estado extra persistido. Por cliente ativo, na ordem:
+
+| Condição (1ª que casar) | Fase |
+|---|---|
+| Sem nenhum pedido | **Não iniciada** ("novo — em negociação") |
+| Último pedido com `pagamento ≠ pago` | **Pendente pagamento** |
+| Último pedido pago e `entrega ≠ entregue` | **Pago** |
+| Ciclo concluído e recompra `atrasado`/`alerta` | **Não iniciada** (retomada automática, com botão WhatsApp) |
+| Ciclo concluído, sem alerta | **Entregue medicação** (descansa até o próximo ciclo) |
+
+- Retomada pro funil é automática via alerta de recompra (§1); inclusão manual acontece ao cadastrar o cliente (entra sem pedido → Não iniciada).
+- "Não iniciada" ordena por urgência: atrasados → novos → alertas. "Entregue" ordena do mais recente.
+
+## 7. Datas e fuso
 
 - Datas de negócio são **dia** (`DATE`), comparadas no fuso local do dispositivo (operador único, no Brasil).
 - "Hoje" = data local do navegador. Não usar UTC para o cálculo de `dias_restantes` (evita erro de ±1 dia).
 
-## 7. Soft delete (reforço)
+## 8. Soft delete (reforço)
 
 - "Excluir" qualquer registro = `is_active = false`. Nunca DELETE físico.
 - Listas e cálculos consideram só `is_active = true`.

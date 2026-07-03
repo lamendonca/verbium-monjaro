@@ -288,6 +288,56 @@ select.form-input { appearance: none; }
 .progress { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; margin-top: 8px; }
 .progress .fill { height: 100%; border-radius: 3px; background: var(--primary); }
 
+/* ============ Kanban (funil do Início) ============ */
+.kanban {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+  scroll-snap-type: x proximity;
+}
+.kanban-col {
+  min-width: 220px;
+  max-width: 240px;
+  flex-shrink: 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 12px;
+  box-shadow: var(--shadow);
+  scroll-snap-align: start;
+}
+.kanban-col .col-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  margin-bottom: 10px;
+}
+.kanban-col .col-title .count {
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
+  color: var(--primary);
+  border-radius: 8px;
+  padding: 1px 7px;
+  font-size: 11px;
+}
+.kanban-card {
+  background: var(--dark);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  margin-bottom: 8px;
+}
+.kanban-card .title { font-size: 14px; font-weight: 600; }
+.kanban-card .sub { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+.kanban-card .acao { margin-top: 8px; }
+.kanban-col .vazio { font-size: 12px; color: var(--text-muted); text-align: center; padding: 12px 0; }
+
 /* ============ Estados ============ */
 .empty {
   text-align: center;
