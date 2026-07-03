@@ -1,7 +1,8 @@
 // pedidos.js — CRUD de pedidos + vínculo a lote + baixa/devolução de estoque.
 // Movimentações de compras.qtd_disp em business-rules.md §2. Sem transação no
 // client (single-user): valida antes, grava o pedido e ajusta o estoque em
-// seguida; erro no ajuste é sinalizado ao operador.
+// seguida; erro no ajuste desfaz o write do pedido (§2: "em erro, reverter")
+// pra não divergir pedido × estoque nem induzir retry duplicado.
 
 import { db, list, insert, update, softDelete } from './db.js';
 import { listarClientes } from './clientes.js';
@@ -50,12 +51,29 @@ export async function salvarPedido(pedido, anterior) {
   }
   const { id, ...resto } = pedido;
   const salvo = id ? await update('pedidos', id, resto) : await insert('pedidos', resto);
-  // Devolve ao lote antigo e debita do novo (mesmo lote → ajuste líquido).
-  if (anterior?.compra_id === pedido.compra_id) {
-    await ajustarEstoque(pedido.compra_id, (anterior?.qtd || 0) - pedido.qtd);
-  } else {
-    await ajustarEstoque(anterior?.compra_id, anterior?.qtd || 0);
-    await ajustarEstoque(pedido.compra_id, -pedido.qtd);
+  const aplicados = []; // ajustes já efetivados, pra desfazer se um falhar
+  try {
+    // Devolve ao lote antigo e debita do novo (mesmo lote → ajuste líquido).
+    if (anterior?.compra_id === pedido.compra_id) {
+      const delta = (anterior?.qtd || 0) - pedido.qtd;
+      await ajustarEstoque(pedido.compra_id, delta);
+      aplicados.push([pedido.compra_id, delta]);
+    } else {
+      await ajustarEstoque(anterior?.compra_id, anterior?.qtd || 0);
+      aplicados.push([anterior?.compra_id, anterior?.qtd || 0]);
+      await ajustarEstoque(pedido.compra_id, -pedido.qtd);
+      aplicados.push([pedido.compra_id, -pedido.qtd]);
+    }
+  } catch {
+    // Reverte estoque e pedido pro estado anterior: um retry cego depois de
+    // falha parcial duplicaria pedido e débito. Se a própria reversão falhar,
+    // o erro honesto ainda sobe pra o operador conferir o lote.
+    try {
+      for (const [cid, delta] of aplicados.reverse()) await ajustarEstoque(cid, -delta);
+      if (id) await update('pedidos', id, { compra_id: anterior?.compra_id ?? null, qtd: anterior?.qtd ?? pedido.qtd });
+      else await softDelete('pedidos', salvo.id);
+    } catch { /* reversão parcial — a mensagem de erro já manda conferir o lote */ }
+    throw new Error('estoque_falhou');
   }
   return salvo;
 }
@@ -213,9 +231,11 @@ export function initPedidos() {
         extra();
       }
     } catch (err) {
-      toast(err.message === 'estoque_insuficiente'
-        ? 'Estoque insuficiente nesse lote.'
-        : 'Não consegui salvar. Confere a conexão e tenta de novo.');
+      const msgs = {
+        estoque_insuficiente: 'Estoque insuficiente nesse lote.',
+        estoque_falhou: 'O ajuste de estoque falhou e o pedido foi desfeito. Confere o lote antes de tentar de novo.',
+      };
+      toast(msgs[err.message] || 'Não consegui salvar. Confere a conexão e tenta de novo.');
     }
   });
 
