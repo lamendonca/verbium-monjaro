@@ -4,12 +4,21 @@ Lógica do domínio: alertas de recompra, estoque por lote, lucro e WhatsApp. Su
 
 ## 1. Alerta de recompra (coração do app)
 
-O operador quer ser avisado **10 dias antes** de o cliente precisar recomprar, com base na frequência (em dias) de cada cliente.
+O operador quer ser avisado **10 dias antes** de o cliente precisar recomprar. A frequência **não é cadastrada obrigatoriamente**: o sistema calcula o ritmo real do cliente a partir do histórico (ADR-013).
+
+**Frequência efetiva** (calculada na view `v_cliente_recompra`, migration `004`):
+```
+compras (datas distintas de pedidos ativos) >= 2:
+  frequencia = ROUND( (MAX(data) - MIN(data)) / (compras - 1) )   -- média dos intervalos
+senão:
+  frequencia = clientes.frequencia (estimativa manual OPCIONAL; pode ser NULL)
+```
+A frequência calculada **prevalece** sobre a estimativa — comportamento real vale mais que chute inicial.
 
 **Definições** (datas em dias, sem hora):
 ```
 ultimo_pedido    = MAX(pedidos.data) do cliente (pedidos ativos)
-proxima_recompra = ultimo_pedido + cliente.frequencia
+proxima_recompra = ultimo_pedido + frequencia_efetiva   (NULL se não há frequência)
 dias_restantes   = proxima_recompra - hoje
 ```
 
@@ -19,10 +28,11 @@ dias_restantes   = proxima_recompra - hoje
 | `dias_restantes < 0` | `atrasado` | vermelho (`--danger`) |
 | `0 <= dias_restantes <= 10` | `alerta` | amarelo (`--warning`) |
 | `dias_restantes > 10` | `ok` | verde (`--success`) |
+| comprou 1x e sem estimativa | `sem_padrao` | cinza — "Aguardando 2ª compra" |
 | sem nenhum pedido ainda | `sem_pedido` | cinza (`--text-muted`) |
 
 - A tela **Início** lista clientes com status `atrasado` ou `alerta`, ordenados por `proxima_recompra` ascendente (mais urgente primeiro).
-- Cliente `sem_pedido` não entra na lista de acionamento (não há base para prever).
+- Clientes `sem_pedido` e `sem_padrao` não entram na lista de acionamento (não há base para prever).
 - "Antecedência" é fixa em **10 dias** (decisão do operador). Se virar configurável, vira env/parametrização — não assumir antes de pedir.
 
 > Fonte de dados: view `monjaro.v_cliente_recompra` (ver `data-model.md`) entrega `ultimo_pedido` e `proxima_recompra`. O cálculo de `dias_restantes` e do status pode ficar no JS (`clientes.js`), usando a data local do dispositivo.
@@ -109,12 +119,51 @@ Oi <nome>! Passando pra ver se você já vai querer repor o Monjaro. 😊
 - Botão WhatsApp aparece no card do cliente e em cada alerta do Início.
 - Validar que `contato` tem dígitos suficientes; se não, desabilitar o botão e sinalizar "contato inválido".
 
-## 6. Datas e fuso
+## 6. Funil de vendas (kanban do Início)
+
+Fases **derivadas** dos dados — nenhum estado extra persistido. Por cliente ativo, na ordem:
+
+| Condição (1ª que casar) | Fase |
+|---|---|
+| **Perdido** (`perdido_em` setado, sem pedido posterior) | **Perdido** (visível por 14 dias; depois sai do funil) |
+| **Follow-up pendente** (`followups` com `enviado_em IS NULL`) | **Follow-up** (mensagem automática agendada) |
+| Sem nenhum pedido | **Não iniciada** ("novo — em negociação") |
+| Último pedido com `pagamento ≠ pago` | **Pendente pagamento** |
+| Último pedido pago e `entrega ≠ entregue` | **Pago** |
+| `negociacao_em` ≥ data do último pedido (retomada manual) | **Não iniciada** ("em negociação") |
+| Ciclo concluído e recompra `atrasado`/`alerta` | **Não iniciada** (retomada automática, com botão WhatsApp) |
+| Ciclo concluído, sem alerta | **Entregue medicação** (descansa até o próximo ciclo) |
+
+**Follow-up** (tabela `followups`, migration `007`): mover um card pra cá abre modal de **data + mensagem**. Um job `pg_cron` (`monjaro_followups`, diário às 12:00 UTC ≈ 9h Brasília) chama `monjaro.enviar_followups()`, que envia as mensagens vencidas via **Evolution API** (`pg_net` → `POST /message/sendText/{instance}`) e marca `enviado_em`. Credenciais em `monjaro.config` (`evolution_url`, `evolution_instance`, `evolution_apikey`) — RLS deny, anon não lê. Um followup pendente por cliente; sair da coluna cancela (`is_active=false`); após enviado, o card volta à derivação normal.
+
+- Retomada pro funil é automática via alerta de recompra (§1); inclusão manual acontece ao cadastrar o cliente (entra sem pedido → Não iniciada).
+- "Não iniciada" ordena por urgência: atrasados → novos → alertas. "Entregue" ordena do mais recente.
+
+**Perdido** (`clientes.perdido_em`, migration `005`): cliente disse que não quer.
+- Marcado no detalhe do cliente (botão "Perdido"); sai dos **alertas** e da retomada automática.
+- Fica na coluna Perdido por `PERDIDO_DIAS_VISIVEL = 14` dias (constante em `clientes.js`); depois some do funil, mas continua fora dos alertas.
+- Volta ao ciclo com **novo pedido** (pedido com data posterior a `perdido_em` anula o perdido — sem write extra) ou pelo botão **Retomar** (limpa `perdido_em`).
+
+**Arrasto** (mouse: imediato; touch: segurar ~200ms) — cada movimento grava a mudança correspondente:
+| Movimento | Efeito |
+|---|---|
+| qualquer → Perdido | `marcarPerdido` (com confirmação) |
+| qualquer → Follow-up | modal de data+mensagem → agenda envio automático |
+| saiu do Follow-up | cancela o followup pendente, depois aplica o destino |
+| Perdido → Não iniciada | `retomarCliente` |
+| Entregue → Não iniciada | `marcarNegociacao` (retomada manual) |
+| Pendente/Pago → Não iniciada | **remove o pedido em aberto** (confirmação; estoque volta) + `marcarNegociacao` |
+| Pendente → Pago | último pedido `pagamento = pago` |
+| Pago/Pendente → Entregue | `pagamento = pago` + `entrega = entregue` |
+| Pago → Pendente · Entregue → Pago | correções (reverte pagamento / entrega → `separado`) |
+| Não iniciada/Perdido → fase de pedido | abre **novo pedido** pré-preenchido (novo ciclo); salvar conclui o movimento |
+
+## 7. Datas e fuso
 
 - Datas de negócio são **dia** (`DATE`), comparadas no fuso local do dispositivo (operador único, no Brasil).
 - "Hoje" = data local do navegador. Não usar UTC para o cálculo de `dias_restantes` (evita erro de ±1 dia).
 
-## 7. Soft delete (reforço)
+## 8. Soft delete (reforço)
 
 - "Excluir" qualquer registro = `is_active = false`. Nunca DELETE físico.
 - Listas e cálculos consideram só `is_active = true`.

@@ -80,6 +80,36 @@ Data base: 2026-06-12
 
 ---
 
+## ADR-011 — RLS: policies abertas para `anon` (MVP consciente)
+
+**Data**: 2026-07-03
+**Contexto**: RLS estava em default deny (ADR-003 delega a defesa dos dados à RLS). Era preciso escolher entre Edge Function + `service_role` (recomendação do `security.md`) e o gate simples.
+**Decisão**: caminho simples do MVP — policies `anon_all` (`USING (true)`) nas 3 tabelas, via `sql/002_rls_policies_anon.sql`, aplicada no projeto `mendonca`.
+**Mitigações**: GRANT ao `anon` só de `SELECT/INSERT/UPDATE` — **sem DELETE**, o que torna o soft delete garantia física no banco; acesso ao app segue atrás do `APP_TOKEN` + URL não pública.
+**Risco aceito**: quem obtiver a anon key lê/escreve os dados (PII de clientes). Aceito temporariamente pelo operador para destravar o uso.
+**Revisão**: migrar para Edge Function + `service_role` antes de expor o app publicamente ou se houver qualquer sinal de acesso indevido (monitorar logs no dashboard).
+
+---
+
+## ADR-012 — Dois temas: claro padrão + dark Dracula (revisa ADR-009)
+
+**Data**: 2026-07-03
+**Contexto**: o operador achou o dark original (quase-preto azulado) escuro demais.
+**Decisão**: tema **claro como padrão** + tema **escuro estilo Dracula** (suave), alternados por toggle no header. Tokens por tema em `html[data-theme]`; escolha persistida em `localStorage['monjaro.theme']` e aplicada antes do primeiro paint. Texto sobre o primário usa `--on-primary` (o roxo Dracula é claro). Badges derivam fundo via `color-mix` para valerem nos dois temas.
+**Revisa**: ADR-009 ("dark por padrão, sem light mode no MVP") — mantém mobile-first e o roxo como cor de marca.
+
+---
+
+## ADR-013 — Frequência de recompra calculada pelo histórico (revisa ADR-004)
+
+**Data**: 2026-07-03
+**Contexto**: o cadastro exigia `frequencia` manual, mas o operador quer que a agenda de acionamento nasça do comportamento real do cliente.
+**Decisão**: `clientes.frequencia` vira **estimativa inicial opcional** (nullable, migration `004`). A partir da **2ª compra**, a frequência efetiva é a média dos intervalos entre as datas distintas de pedidos — `(MAX(data) − MIN(data)) / (compras − 1)` — calculada na view `v_cliente_recompra`, e **prevalece** sobre a estimativa.
+**Novos estados**: cliente com 1 compra e sem estimativa fica `sem_padrao` ("Aguardando 2ª compra") e não entra na agenda do Início.
+**Revisa**: ADR-004 (frequência manual obrigatória). Mantém a antecedência fixa de 10 dias.
+
+---
+
 ## Pendências / decisões adiadas
 
 - **Pagamento parcial com valor**: hoje `parcial` conta como "a receber" inteiro. Se precisar do valor pago exato, adicionar `valor_pago` em migration `002`. Não implementar antes de pedido.

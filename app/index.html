@@ -4,33 +4,390 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <title>Gestão Monjaro</title>
+  <!-- Tema antes do primeiro paint (evita flash). Claro é o padrão. -->
+  <script>document.documentElement.dataset.theme = localStorage.getItem('monjaro.theme') || 'light';</script>
   <link rel="stylesheet" href="./css/style.css">
 </head>
 <body>
-  <!--
-    STUB — esqueleto da estrutura. Implementar conforme ui.md + brand.md.
-    Estrutura alvo (app de página única, sem router):
-      <div id="login">           ... tela de token (auth.js)
-      <header class="header">    ... título + subtítulo
-      <main>
-        <section id="page-inicio"     class="page active"> KPIs + alertas recompra
-        <section id="page-clientes"   class="page">       lista + CRUD + WhatsApp
-        <section id="page-pedidos"    class="page">       lista + CRUD + vínculo lote
-        <section id="page-lotes"      class="page">       lista compras + estoque
-        <section id="page-financeiro" class="page">       lucro por lote/cliente
-      <nav class="bottom-nav">   ... 5 abas: Início Clientes Pedidos Lotes Financeiro
-      <div class="modal-overlay">... modais slide-up de cadastro/edição
-
-    Ordem dos scripts: env.js PRIMEIRO (injeta window.__ENV__), depois os módulos.
-  -->
 
   <!-- env injetada em runtime pelo nginx (gitignored). NÃO remover. -->
   <script src="/env.js"></script>
 
-  <!-- Módulos ES (sem bundler). db.js é a única porta do Supabase. -->
-  <script type="module" src="./js/config.js"></script>
-  <script type="module" src="./js/auth.js"></script>
-  <!-- demais módulos importados sob demanda pelas telas:
-       clientes.js · pedidos.js · compras.js · financeiro.js -->
+  <!-- ===== Login (sem token válido, só isto aparece) ===== -->
+  <div id="login">
+    <div class="login-box">
+      <div class="logo">💉</div>
+      <h1>Gestão Monjaro</h1>
+      <p>Digite o token de acesso para entrar.</p>
+      <form id="login-form">
+        <input type="password" id="login-token" class="form-input" placeholder="Token de acesso" autocomplete="current-password" required>
+        <div id="login-error" class="error-msg hidden">Token inválido.</div>
+        <button type="submit" class="btn btn-primary">Entrar</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== Shell ===== -->
+  <div id="app" class="hidden">
+    <header class="header">
+      <div>
+        <h1>Gestão Monjaro</h1>
+        <div class="subtitle">vendas · estoque · recompra</div>
+      </div>
+      <div style="display:flex; gap:8px">
+        <button id="btn-tema" class="btn-icon" aria-label="Alternar tema">🌙</button>
+        <button id="btn-logout" class="btn-icon" aria-label="Sair">⏻</button>
+      </div>
+    </header>
+
+    <main>
+      <!-- ===== Início ===== -->
+      <section id="page-inicio" class="page active">
+        <div class="summary-grid">
+          <div class="summary-card"><div class="label">Clientes ativos</div><div class="value" id="kpi-clientes">—</div></div>
+          <div class="summary-card"><div class="label">Estoque livre</div><div class="value" id="kpi-estoque">—</div></div>
+          <div class="summary-card"><div class="label">A receber</div><div class="value" id="kpi-areceber" style="color: var(--warning)">—</div></div>
+          <div class="summary-card"><div class="label">Lucro</div><div class="value" id="kpi-lucro">—</div></div>
+        </div>
+        <div class="section-title">Acionar nos próximos 10 dias</div>
+        <div id="lista-alertas"></div>
+        <div class="section-title">Funil de vendas</div>
+        <div class="form-hint" style="margin:-4px 0 10px">Segure um card para arrastar entre as fases.</div>
+        <div id="funil" class="kanban"></div>
+      </section>
+
+      <!-- ===== Clientes ===== -->
+      <section id="page-clientes" class="page">
+        <div class="page-title-row">
+          <div class="page-title">Clientes</div>
+          <button class="btn btn-add" id="btn-novo-cliente" aria-label="Novo cliente">+</button>
+        </div>
+        <div class="form-group">
+          <input type="search" id="busca-clientes" class="form-input" placeholder="Buscar por nome...">
+        </div>
+        <div id="filtro-clientes" style="margin:-6px 0 10px"></div>
+        <div id="lista-clientes"></div>
+      </section>
+
+      <!-- ===== Pedidos ===== -->
+      <section id="page-pedidos" class="page">
+        <div class="page-title-row">
+          <div class="page-title">Pedidos</div>
+          <button class="btn btn-add" id="btn-novo-pedido" aria-label="Novo pedido">+</button>
+        </div>
+        <div class="tabs" id="tabs-pedidos">
+          <button class="tab active" data-filtro="todos">Todos</button>
+          <button class="tab" data-filtro="pendentes">Pendentes</button>
+          <button class="tab" data-filtro="entregar">A entregar</button>
+        </div>
+        <div id="lista-pedidos"></div>
+      </section>
+
+      <!-- ===== Lotes ===== -->
+      <section id="page-lotes" class="page">
+        <div class="page-title-row">
+          <div class="page-title">Lotes</div>
+          <button class="btn btn-add" id="btn-novo-lote" aria-label="Novo lote">+</button>
+        </div>
+        <div id="lista-lotes"></div>
+      </section>
+
+      <!-- ===== Financeiro ===== -->
+      <section id="page-financeiro" class="page">
+        <div class="page-title">Financeiro</div>
+        <div class="summary-grid" style="margin-top: 14px">
+          <div class="summary-card"><div class="label">Investido</div><div class="value" id="fin-investido">—</div></div>
+          <div class="summary-card"><div class="label">Recebido</div><div class="value" style="color: var(--success)" id="fin-recebido">—</div></div>
+          <div class="summary-card"><div class="label">A receber</div><div class="value" style="color: var(--warning)" id="fin-areceber">—</div></div>
+          <div class="summary-card"><div class="label">Lucro líquido</div><div class="value" id="fin-lucro">—</div></div>
+        </div>
+        <div class="section-title">Lucro por lote</div>
+        <div id="lista-fin-lotes"></div>
+        <div class="section-title">Lucro por cliente</div>
+        <div id="lista-fin-clientes"></div>
+      </section>
+    </main>
+
+    <!-- ===== Bottom nav ===== -->
+    <nav class="bottom-nav">
+      <button class="nav-item active" data-page="page-inicio">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        Início
+      </button>
+      <button class="nav-item" data-page="page-clientes">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Clientes
+      </button>
+      <button class="nav-item" data-page="page-pedidos">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Pedidos
+      </button>
+      <button class="nav-item" data-page="page-lotes">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+        Lotes
+      </button>
+      <button class="nav-item" data-page="page-financeiro">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        Financeiro
+      </button>
+    </nav>
+  </div>
+
+  <!-- ===== Modal: cliente ===== -->
+  <div class="modal-overlay" id="modal-cliente">
+    <div class="modal">
+      <div class="modal-handle"></div>
+      <div class="modal-title" id="modal-cliente-titulo">Novo cliente</div>
+      <form id="form-cliente">
+        <input type="hidden" id="cliente-id">
+        <div class="form-group">
+          <label class="form-label" for="cliente-nome">Nome *</label>
+          <input class="form-input" id="cliente-nome" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="cliente-contato">WhatsApp *</label>
+          <input class="form-input" id="cliente-contato" type="tel" placeholder="(11) 99999-9999" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="cliente-frequencia">Recompra (dias) — estimativa</label>
+            <input class="form-input" id="cliente-frequencia" type="number" min="1" placeholder="opcional">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="cliente-dose">Dose (opcional)</label>
+            <input class="form-input" id="cliente-dose">
+          </div>
+        </div>
+        <div class="form-hint" style="margin:-6px 0 14px">A partir da 2ª compra, o ritmo real do cliente é calculado automaticamente e vale mais que a estimativa.</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="cliente-origem">Origem</label>
+            <select class="form-input" id="cliente-origem">
+              <option value="">—</option>
+              <option value="maysa">Maysa</option>
+              <option value="lucas">Lucas</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="cliente-forma-pagamento">Pagamento</label>
+            <select class="form-input" id="cliente-forma-pagamento">
+              <option value="">—</option>
+              <option value="pix">Pix</option>
+              <option value="cartao">Cartão</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="cliente-anotacao">Anotação</label>
+          <textarea class="form-input" id="cliente-anotacao" rows="2" placeholder="opcional"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="cliente-valor-negociacao">Valor da negociação atual (R$)</label>
+          <input class="form-input" id="cliente-valor-negociacao" type="number" step="0.01" min="0" placeholder="opcional">
+        </div>
+        <button type="submit" class="btn btn-primary">Salvar</button>
+        <button type="button" class="btn btn-danger hidden" id="btn-remover-cliente" style="width:100%; margin-top:10px">Remover cliente</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== Modal: detalhe do cliente (histórico completo) ===== -->
+  <div class="modal-overlay" id="modal-detalhe">
+    <div class="modal">
+      <div class="modal-handle"></div>
+      <div id="detalhe-corpo"></div>
+    </div>
+  </div>
+
+  <!-- ===== Modal: follow-up (agendar mensagem automática) ===== -->
+  <div class="modal-overlay" id="modal-followup">
+    <div class="modal">
+      <div class="modal-handle"></div>
+      <div class="modal-title" id="modal-followup-titulo">Follow-up</div>
+      <form id="form-followup">
+        <input type="hidden" id="followup-cliente">
+        <div class="form-group">
+          <label class="form-label" for="followup-data">Enviar em *</label>
+          <input class="form-input" id="followup-data" type="date" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="followup-mensagem">Mensagem *</label>
+          <textarea class="form-input" id="followup-mensagem" rows="3" required></textarea>
+          <div class="form-hint">Enviada automaticamente pelo WhatsApp (Evolution) por volta das 9h do dia escolhido.</div>
+        </div>
+        <button type="submit" class="btn btn-primary">Agendar</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== Modal: pedido ===== -->
+  <div class="modal-overlay" id="modal-pedido">
+    <div class="modal">
+      <div class="modal-handle"></div>
+      <div class="modal-title" id="modal-pedido-titulo">Novo pedido</div>
+      <form id="form-pedido">
+        <input type="hidden" id="pedido-id">
+        <div class="form-group">
+          <label class="form-label" for="pedido-cliente">Cliente *</label>
+          <select class="form-input" id="pedido-cliente" required></select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="pedido-data">Data *</label>
+            <input class="form-input" id="pedido-data" type="date" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="pedido-qtd">Qtd</label>
+            <input class="form-input" id="pedido-qtd" type="number" min="1" value="1">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="pedido-valor">Valor (R$) *</label>
+          <input class="form-input" id="pedido-valor" type="number" step="0.01" min="0" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="pedido-lote">Lote (baixa de estoque)</label>
+          <select class="form-input" id="pedido-lote"></select>
+          <div class="form-hint" id="pedido-lote-hint"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="pedido-pagamento">Pagamento</label>
+            <select class="form-input" id="pedido-pagamento">
+              <option value="pendente">Pendente</option>
+              <option value="parcial">Parcial</option>
+              <option value="pago">Pago</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="pedido-entrega">Entrega</label>
+            <select class="form-input" id="pedido-entrega">
+              <option value="aguardando">Aguardando</option>
+              <option value="separado">Separado</option>
+              <option value="entregue">Entregue</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="pedido-dose">Dose (opcional)</label>
+          <input class="form-input" id="pedido-dose">
+        </div>
+        <button type="submit" class="btn btn-primary">Salvar</button>
+        <button type="button" class="btn btn-danger hidden" id="btn-remover-pedido" style="width:100%; margin-top:10px">Remover pedido</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== Modal: lote ===== -->
+  <div class="modal-overlay" id="modal-lote">
+    <div class="modal">
+      <div class="modal-handle"></div>
+      <div class="modal-title" id="modal-lote-titulo">Novo lote</div>
+      <form id="form-lote">
+        <input type="hidden" id="lote-id">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="lote-data">Data da compra *</label>
+            <input class="form-input" id="lote-data" type="date" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="lote-qtd">Quantidade *</label>
+            <input class="form-input" id="lote-qtd" type="number" min="1" required>
+          </div>
+        </div>
+        <div class="form-hint warn hidden" id="lote-aviso-minimo">⚠️ Lote abaixo do mínimo viável de 20.</div>
+        <div class="form-group">
+          <label class="form-label" for="lote-custo">Custo total (R$) *</label>
+          <input class="form-input" id="lote-custo" type="number" step="0.01" min="0" required>
+          <div class="form-hint" id="lote-custo-unit"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="lote-pagamento">Pagamento</label>
+            <select class="form-input" id="lote-pagamento">
+              <option value="pendente">Pendente</option>
+              <option value="parcial">Parcial</option>
+              <option value="pago">Pago</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="lote-chegada">Chegada (opcional)</label>
+            <input class="form-input" id="lote-chegada" type="date">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="lote-referencia">Referência (opcional)</label>
+          <input class="form-input" id="lote-referencia" placeholder="ex.: Lote julho">
+        </div>
+        <button type="submit" class="btn btn-primary">Salvar</button>
+        <button type="button" class="btn btn-danger hidden" id="btn-remover-lote" style="width:100%; margin-top:10px">Remover lote</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== Bootstrap: auth + navegação + init dos módulos ===== -->
+  <script type="module">
+    import { isAuthenticated, login, logout } from './js/auth.js';
+
+    const $login = document.getElementById('login');
+    const $app = document.getElementById('app');
+    const refreshers = {}; // page-id -> refresh()
+
+    async function iniciarApp() {
+      $login.classList.add('hidden');
+      $app.classList.remove('hidden');
+      // Módulos só carregam (e consultam o banco) depois do login.
+      const [clientes, pedidos, compras, financeiro, inicio] = await Promise.all([
+        import('./js/clientes.js'),
+        import('./js/pedidos.js'),
+        import('./js/compras.js'),
+        import('./js/financeiro.js'),
+        import('./js/inicio.js'),
+      ]);
+      refreshers['page-clientes'] = clientes.initClientes();
+      refreshers['page-pedidos'] = pedidos.initPedidos();
+      refreshers['page-lotes'] = compras.initCompras();
+      refreshers['page-financeiro'] = financeiro.initFinanceiro();
+      refreshers['page-inicio'] = inicio.initInicio();
+      refreshers['page-inicio']();
+    }
+
+    // Navegação: uma .page ativa por vez; refresh ao entrar na aba.
+    document.querySelectorAll('.nav-item').forEach((item) => {
+      item.addEventListener('click', () => {
+        document.querySelectorAll('.nav-item').forEach((n) => n.classList.remove('active'));
+        document.querySelectorAll('.page').forEach((p) => p.classList.remove('active'));
+        item.classList.add('active');
+        document.getElementById(item.dataset.page).classList.add('active');
+        refreshers[item.dataset.page]?.();
+      });
+    });
+
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const ok = await login(document.getElementById('login-token').value.trim());
+      document.getElementById('login-error').classList.toggle('hidden', ok);
+      if (ok) iniciarApp();
+    });
+
+    const btnTema = document.getElementById('btn-tema');
+    const iconeTema = () => {
+      btnTema.textContent = document.documentElement.dataset.theme === 'dark' ? '☀️' : '🌙';
+    };
+    btnTema.addEventListener('click', () => {
+      const novo = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+      document.documentElement.dataset.theme = novo;
+      localStorage.setItem('monjaro.theme', novo);
+      iconeTema();
+    });
+    iconeTema();
+
+    document.getElementById('btn-logout').addEventListener('click', () => {
+      logout();
+      location.reload();
+    });
+
+    if (await isAuthenticated()) iniciarApp();
+  </script>
 </body>
 </html>

@@ -7,45 +7,43 @@ App pessoal, **não** institucional. Não há marca corporativa a respeitar — 
 ## Princípios visuais
 
 - **Mobile first absoluto** — desenhado para a tela do celular, uma coluna, alvos de toque ≥ 44px.
-- **Dark por padrão** — fundo escuro azul-arroxeado; sem light mode no MVP.
+- **Dois temas** (ADR-012): **claro por padrão** + escuro estilo Dracula, alternados por toggle no header (`html[data-theme]`, persistido em `localStorage['monjaro.theme']`, aplicado antes do primeiro paint por script inline no `<head>`).
 - **Roxo como cor de marca** — destaques, navegação ativa, botões primários.
 - **Cartões arredondados** (`border-radius` generoso) sobre fundo escuro.
 - **Hierarquia por cor de status** — verde/amarelo/vermelho para pagamento, entrega e recompra.
 
-## Paleta — CSS custom properties
+## Paleta — CSS custom properties (dois temas)
 
-Definir em `:root` no topo de `app/css/style.css`:
+Definidos em `app/css/style.css` sob `html[data-theme="light"]` (padrão, também em `:root`) e `html[data-theme="dark"]` (Dracula):
 
 ```css
-:root {
-  /* Marca */
-  --primary:      #6C63FF;   /* roxo — navegação ativa, botões primários, destaques */
-  --primary-dark: #5A52D5;   /* hover/active do primário */
+:root, html[data-theme="light"] {
+  --primary: #6C63FF;  --primary-dark: #5A52D5;  --on-primary: #FFFFFF;
+  --success: #1FA85C;  --warning: #C07C10;       --danger: #D93025;   /* escurecidos p/ contraste */
+  --dark: #F4F5FA;     --card: #FFFFFF;          --card2: #4E46C8;
+  --text: #1E2235;     --text-muted: #6B7285;    --border: #E3E5F0;
+  --shadow: 0 1px 3px rgba(30, 34, 53, .08);
+}
 
-  /* Status */
-  --success: #2ECC71;        /* pago, entregue, recompra ok */
-  --warning: #F39C12;        /* parcial, alerta de recompra (≤10 dias) */
-  --danger:  #E74C3C;        /* pendente, atrasado, ações destrutivas */
-
-  /* Superfícies (dark) */
-  --dark:   #1A1A2E;         /* fundo da página */
-  --card:   #16213E;         /* cards, header, bottom-nav, modais */
-  --card2:  #0F3460;         /* gradiente do header, realces de superfície */
-
-  /* Texto e bordas */
-  --text:       #E0E0E0;     /* texto principal */
-  --text-muted: #8892A4;     /* texto secundário, labels, captions */
-  --border:     #2A2A4A;     /* divisores, contorno de cards e inputs */
+html[data-theme="dark"] {  /* paleta Dracula — suave, sem quase-preto */
+  --primary: #BD93F9;  --primary-dark: #A679F0;  --on-primary: #282A36;
+  --success: #50FA7B;  --warning: #FFB86C;       --danger: #FF5555;
+  --dark: #282A36;     --card: #343746;          --card2: #44475A;
+  --text: #F8F8F2;     --text-muted: #9AA5CE;    --border: #44475A;
+  --shadow: none;
 }
 ```
 
+Convenções: `--dark` segue sendo o nome do fundo da página (compat.); texto sobre `--primary` usa `--on-primary` (no dark o roxo Dracula é claro → texto escuro); cards levam `box-shadow: var(--shadow)` (só visível no claro).
+
 ### Badges de status (helpers prontos)
+Fundos derivados por `color-mix` para funcionarem nos dois temas:
 ```css
-.badge-green  { background: rgba(46,204,113,.2);  color: var(--success); }
-.badge-yellow { background: rgba(243,156,18,.2);  color: var(--warning); }
-.badge-red    { background: rgba(231,76,60,.2);   color: var(--danger);  }
-.badge-purple { background: rgba(108,99,255,.2);  color: var(--primary); }
-.badge-gray   { background: rgba(136,146,164,.2); color: var(--text-muted); }
+.badge-green  { background: color-mix(in srgb, var(--success) 16%, transparent);    color: var(--success); }
+.badge-yellow { background: color-mix(in srgb, var(--warning) 16%, transparent);    color: var(--warning); }
+.badge-red    { background: color-mix(in srgb, var(--danger) 16%, transparent);     color: var(--danger);  }
+.badge-purple { background: color-mix(in srgb, var(--primary) 16%, transparent);    color: var(--primary); }
+.badge-gray   { background: color-mix(in srgb, var(--text-muted) 16%, transparent); color: var(--text-muted); }
 ```
 
 ### Mapa cor → significado (usar consistente em todo o app)

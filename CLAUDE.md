@@ -9,7 +9,7 @@ Aplicação pessoal de gestão de vendas de Monjaro. Controla clientes, pedidos,
 - **Quem usa**: o próprio operador, pelo **celular**, sempre. Mobile first não é preferência — é requisito.
 - **Domínio**: revende Monjaro para amigos. Vende ~50 unidades por ciclo; precisa comprar ≥ 20 por lote para a compra ser viável.
 - **O que controla**: clientes (nome, contato, frequência de recompra em dias), pedidos, compras ao fornecedor (lotes), estoque por lote e financeiro (lucro por lote e por cliente).
-- **O que NÃO faz**: não é multi-usuário, não cadastra dose por apresentação (produto único — 1 unidade de 4ml), não envia mensagens automáticas (só gera o alerta e abre o WhatsApp).
+- **O que NÃO faz**: não é multi-usuário, não cadastra dose por apresentação (produto único — 1 unidade de 4ml). Mensagens automáticas existem **só** no Follow-up agendado (via Evolution API + pg_cron — `business-rules.md` §6); alertas de recompra continuam manuais (abrem o WhatsApp).
 
 ## Stack
 
@@ -66,7 +66,8 @@ monjaro/
 
 ## Schema — `monjaro.*` (resumo; fonte da verdade: `data-model.md` + `sql/001_schema.sql`)
 
-- `clientes` — `nome`, `contato` (WhatsApp), `frequencia` (dias entre recompras), `dose` (opcional, texto livre).
+- `clientes` — `nome`, `contato` (WhatsApp), `frequencia` (estimativa opcional; efetiva é calculada do histórico), `dose` (opcional), `perdido_em`/`negociacao_em` (funil), `origem` (maysa|lucas), `anotacao`.
+- `followups` — mensagens agendadas: FK `cliente_id`, `data`, `mensagem`, `enviado_em` (envio via Evolution/pg_cron). `config` — credenciais (RLS deny; anon não lê).
 - `compras` — lotes do fornecedor: `qtd`, `qtd_disp` (decrementa a cada pedido), `custo_total`, `custo_unit`, `pagamento`, `chegada`, `referencia`.
 - `pedidos` — venda: FK `cliente_id`, FK `compra_id` (lote de baixa, nullable), `valor`, `pagamento`, `entrega`.
 
@@ -135,18 +136,25 @@ Perguntar **uma vez** com as opções mapeadas — não implementar suposição.
 - [x] `sql/001_schema.sql` (clientes, compras, pedidos + índices + views)
 - [x] Stubs de `app/` (index.html, css/style.css, js/* com docblocks de spec)
 
-### Implementação (a fazer)
-- [ ] `app/js/config.js` + injeção de env pelo nginx
-- [ ] `app/js/db.js` (porta única Supabase)
-- [ ] `app/js/auth.js` (login por APP_TOKEN)
-- [ ] `app/index.html` + `app/css/style.css` (shell mobile, bottom-nav, dark)
-- [ ] Tela Início (dashboard de alertas + KPIs)
-- [ ] Tela Clientes (CRUD + WhatsApp + status de recompra)
-- [ ] Tela Pedidos (CRUD + vínculo a lote + baixa de estoque)
-- [ ] Tela Lotes/Compras (CRUD + estoque disponível)
-- [ ] Tela Financeiro (lucro por lote e por cliente)
-- [ ] `docker compose up` validado servindo o app
-- [ ] Schema aplicado no Supabase real
+### Implementação
+- [x] `app/js/config.js` + injeção de env pelo nginx
+- [x] `app/js/db.js` (porta única Supabase + helpers list/insert/update/softDelete)
+- [x] `app/js/auth.js` (login por APP_TOKEN — digest SHA-256, comparação constante)
+- [x] `app/index.html` + `app/css/style.css` (shell mobile, bottom-nav, dark)
+- [x] Tela Início (dashboard de alertas + KPIs) — `app/js/inicio.js`
+- [x] Tela Clientes (CRUD + WhatsApp + status de recompra)
+- [x] Tela Pedidos (CRUD + vínculo a lote + baixa/devolução de estoque)
+- [x] Tela Lotes/Compras (CRUD + estoque disponível + aviso lote < 20)
+- [x] Tela Financeiro (lucro por lote e por cliente + consolidado)
+- [x] `docker compose up` validado servindo o app (nginx não-root, porta 8080 interna)
+- [x] Schema aplicado no Supabase real (projeto `mendonca` / lfvjefvbxyrzediqcurt, migration `monjaro_001_schema`; RLS ligada nas 3 tabelas)
+- [x] `.env` com credenciais reais (URL + anon key do mendonca, APP_TOKEN gerado)
+- [x] Policies RLS: gate simples `anon` (ADR-011; `sql/002` + `sql/003` — anon sem DELETE/TRUNCATE)
+- [x] Schema `monjaro` exposto na API (verificado via REST: select/insert/update ok, delete 42501)
+
+> Estrutura: além dos módulos spec'ados existem `app/js/ui.js` (helpers de
+> apresentação compartilhados) e `app/js/inicio.js` (dashboard — compõe
+> clientes/compras/financeiro, conforme mapa tela→módulo do `ui.md`).
 
 ## Para aprofundar
 

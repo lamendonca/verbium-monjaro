@@ -33,14 +33,20 @@ Quem compra. Cadastro mínimo (decisão do operador: só nome, contato e frequê
 | `id` | UUID PK | `gen_random_uuid()` |
 | `nome` | TEXT NOT NULL | identificação |
 | `contato` | TEXT NOT NULL | WhatsApp (usado no botão de acionamento) |
-| `frequencia` | INT NOT NULL | **dias** entre recompras (base do alerta) |
+| `frequencia` | INT NULL | estimativa inicial de **dias** entre recompras (opcional desde a `004`) |
 | `dose` | TEXT NULL | opcional, texto livre (não estruturado) |
+| `perdido_em` | DATE NULL | data em que o cliente recusou (funil "Perdido", migration `005`) |
+| `negociacao_em` | DATE NULL | retomada manual de negociação no funil (migration `006`) |
+| `origem` | TEXT NULL | quem trouxe o cliente: `maysa` · `lucas` (migration `008`) |
+| `anotacao` | TEXT NULL | anotação livre do operador (migration `008`) |
+| `valor_negociacao` | NUMERIC(10,2) NULL | preço da negociação em andamento (migration `010`) |
+| `forma_pagamento` | TEXT NULL | preferência do cliente: `pix` · `cartao` (migration `011`) |
 | `is_active` | BOOLEAN NOT NULL DEFAULT true | soft delete |
 | `created_at` | TIMESTAMPTZ DEFAULT NOW() | |
 | `updated_at` | TIMESTAMPTZ DEFAULT NOW() | trigger |
 
 Notas:
-- `frequencia` é por cliente — é a única base de acionamento (o operador decidiu não modelar dose por apresentação).
+- `frequencia` é só a **estimativa inicial** (opcional): a partir da 2ª compra a frequência efetiva é calculada do histórico pela view `v_cliente_recompra` e prevalece (migration `004`, ADR-013, `business-rules.md` §1).
 - `contato` deve ser normalizável para link `wa.me` (ver `business-rules.md` → WhatsApp).
 
 ### `monjaro.compras`
@@ -124,16 +130,13 @@ LEFT JOIN monjaro.pedidos p
 WHERE c.is_active
 GROUP BY c.id;
 
--- Último pedido por cliente: base do alerta de recompra
-CREATE OR REPLACE VIEW monjaro.v_cliente_recompra AS
-SELECT cl.id AS cliente_id, cl.nome, cl.contato, cl.frequencia,
-       MAX(p.data) AS ultimo_pedido,
-       MAX(p.data) + cl.frequencia AS proxima_recompra
-FROM monjaro.clientes cl
-LEFT JOIN monjaro.pedidos p
-       ON p.cliente_id = cl.id AND p.is_active
-WHERE cl.is_active
-GROUP BY cl.id;
+-- Recompra por cliente: frequência EFETIVA (média dos intervalos entre
+-- datas distintas de pedidos quando >= 2 compras; senão a estimativa
+-- manual) + próxima recompra. Redefinida na migration 004 — ver
+-- sql/004_frequencia_calculada.sql para o SQL vigente.
+-- Colunas: cliente_id, nome, contato, frequencia, ultimo_pedido,
+--          proxima_recompra, compras, ultimo_valor (migration 009 —
+--          valor da última venda, apoio à negociação)
 ```
 
 > O cálculo do **status** do alerta (`atrasado`/`alerta`/`ok`) e do **lucro por cliente** pode ficar na aplicação (mais simples de iterar) ou virar view depois. Regra em `business-rules.md`.

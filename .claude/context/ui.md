@@ -41,6 +41,7 @@ Objetivo: o operador abre o app e vê **quem acionar** e o **resumo do negócio*
   - Estoque livre (Σ `compras.qtd_disp` dos lotes ativos)
   - A receber (Σ `valor` de pedidos com `pagamento ≠ pago`)
   - Lucro consolidado (Σ lucro por lote) — ver `business-rules.md`
+- **Funil de vendas (kanban)**: 4 colunas com rolagem horizontal — Não iniciada · Pendente pagamento · Pago · Entregue medicação. Fases derivadas do último pedido + recompra (`business-rules.md` §6); cards de retomada trazem botão WhatsApp.
 - **Card "Acionar nos próximos 10 dias"**: lista de clientes com `status ∈ {atrasado, alerta}`, ordenados por `proxima_recompra` ascendente. Cada linha: nome + sub ("recompra em X dias" / "atrasado há X dias") + badge de status + botão WhatsApp.
 - Empty state se ninguém a acionar.
 
