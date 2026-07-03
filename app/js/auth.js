@@ -1,34 +1,39 @@
-// auth.js — login por APP_TOKEN (sem Supabase Auth). STUB: spec abaixo.
-//
-// Responsabilidade:
-//   - Na carga, verificar se há sessão válida em localStorage; se não, mostrar
-//     a tela de login (#login) e esconder o shell do app.
-//   - Comparar o token digitado com APP_TOKEN em TEMPO CONSTANTE
-//     (não usar `digitado === APP_TOKEN`; ver security.md → comparação constante,
-//     ex.: comparar digests via crypto.subtle).
-//   - Em sucesso: marcar flag de sessão em localStorage e revelar o app.
-//   - Expor logout() que limpa a flag.
-//
-// Importa: APP_TOKEN de ./config.js.
-// NUNCA logar o token. Ver security.md.
-//
-// Esboço de API:
-//   export function isAuthenticated() { ... }
-//   export async function login(tokenDigitado) { ... return boolean }
-//   export function logout() { ... }
+// auth.js — login por APP_TOKEN (sem Supabase Auth).
+// A sessão guarda o digest SHA-256 do token: rotacionar o APP_TOKEN no .env
+// invalida sessões antigas automaticamente. NUNCA logar o token. Ver security.md.
 
 import { APP_TOKEN } from './config.js';
 
-export function isAuthenticated() {
-  // TODO: ler flag de sessão em localStorage.
-  return false;
+const SESSION_KEY = 'monjaro.session';
+
+async function sha256Hex(text) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-export async function login(/* tokenDigitado */) {
-  // TODO: comparar em tempo constante com APP_TOKEN; setar sessão; ver security.md.
-  throw new Error('auth.login não implementado — ver auth.js spec');
+// Comparação em tempo constante sobre digests de tamanho fixo — evita timing
+// e evita comparar o token cru. Ver security.md → comparação constante.
+function constantTimeEqual(a, b) {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+export async function isAuthenticated() {
+  const saved = localStorage.getItem(SESSION_KEY);
+  if (!saved || !APP_TOKEN) return false;
+  return constantTimeEqual(saved, await sha256Hex(APP_TOKEN));
+}
+
+export async function login(tokenDigitado) {
+  if (!APP_TOKEN) return false;
+  const [digitado, esperado] = await Promise.all([sha256Hex(tokenDigitado), sha256Hex(APP_TOKEN)]);
+  if (!constantTimeEqual(digitado, esperado)) return false;
+  localStorage.setItem(SESSION_KEY, esperado);
+  return true;
 }
 
 export function logout() {
-  // TODO: limpar flag de sessão.
+  localStorage.removeItem(SESSION_KEY);
 }
