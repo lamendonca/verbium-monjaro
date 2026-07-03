@@ -138,6 +138,9 @@ function itemHistorico(p) {
         el('span', { class: `badge ${clsE}` }, labE))));
 }
 
+// Registrado por initClientes — permite Editar a partir de qualquer tela.
+let abrirModalClienteRef = null;
+
 export async function abrirDetalheCliente(cliente, { onEditar, onChanged } = {}) {
   const corpo = document.getElementById('detalhe-corpo');
   openModal('modal-detalhe');
@@ -183,7 +186,7 @@ export async function abrirDetalheCliente(cliente, { onEditar, onChanged } = {})
         el('span', { class: `badge ${cls}` }, label),
         badgeOrigem(cliente.origem),
         perdido ? el('span', { class: 'badge badge-red' }, `Perdido em ${fmtData(cliente.perdido_em)}`) : null),
-      cliente.anotacao
+      typeof cliente.anotacao === 'string' && cliente.anotacao.trim() && cliente.anotacao !== 'null'
         ? el('div', {
             class: 'card',
             style: 'padding:10px 12px; font-size:13px; color:var(--text-muted); margin-bottom:14px',
@@ -197,37 +200,22 @@ export async function abrirDetalheCliente(cliente, { onEditar, onChanged } = {})
         el('div', { class: 'summary-card' },
           el('div', { class: 'label' }, 'Última venda'),
           el('div', { class: 'value', style: 'color: var(--primary)' },
-            r?.ultimo_valor != null ? fmtMoney(r.ultimo_valor) : '—'))),
-      // Valor da negociação em andamento — editável direto no detalhe.
-      (() => {
-        const input = el('input', {
-          class: 'form-input', type: 'number', step: '0.01', min: '0',
-          placeholder: 'R$', value: cliente.valor_negociacao ?? '',
-        });
-        const btn = el('button', { class: 'btn btn-outline btn-sm' }, 'Salvar');
-        onClickOnce(btn, async () => {
-          try {
-            const valor = input.value ? Number(input.value) : null;
-            await update('clientes', cliente.id, { valor_negociacao: valor });
-            cliente.valor_negociacao = valor;
-            toast('Salvo.');
-            onChanged?.();
-          } catch {
-            toast('Não consegui salvar. Tenta de novo.');
-          }
-        });
-        return el('div', { class: 'form-group' },
-          el('label', { class: 'form-label' }, 'Valor da negociação atual'),
-          el('div', { style: 'display:flex; gap:8px; align-items:center' }, input, btn));
-      })(),
+            r?.ultimo_valor != null ? fmtMoney(r.ultimo_valor) : '—')),
+        el('div', { class: 'summary-card' },
+          el('div', { class: 'label' }, 'Negociação atual'),
+          el('div', { class: 'value', style: 'color: var(--warning)' },
+            cliente.valor_negociacao != null ? fmtMoney(cliente.valor_negociacao) : '—'))),
       el('div', { style: 'display:flex; gap:8px; margin-bottom:16px' },
         botaoWhatsApp(cliente.nome, cliente.contato),
-        onEditar
-          ? el('button', {
-              class: 'btn btn-outline btn-sm',
-              onclick: () => { closeModal('modal-detalhe'); onEditar(cliente); },
-            }, 'Editar')
-          : null,
+        (() => {
+          const editar = onEditar || abrirModalClienteRef;
+          return editar
+            ? el('button', {
+                class: 'btn btn-outline btn-sm',
+                onclick: () => { closeModal('modal-detalhe'); editar(cliente); },
+              }, 'Editar')
+            : null;
+        })(),
         btnPerdido),
       el('div', { class: 'section-title', style: 'margin-top:0' }, 'Histórico de pedidos'),
       pedidos.length
@@ -251,6 +239,7 @@ export function initClientes() {
     dose: document.getElementById('cliente-dose'),
     origem: document.getElementById('cliente-origem'),
     anotacao: document.getElementById('cliente-anotacao'),
+    valorNegociacao: document.getElementById('cliente-valor-negociacao'),
   };
   const btnRemover = document.getElementById('btn-remover-cliente');
   let cache = { clientes: [], recompra: new Map() };
@@ -264,6 +253,7 @@ export function initClientes() {
     campos.dose.value = cliente?.dose || '';
     campos.origem.value = cliente?.origem || '';
     campos.anotacao.value = cliente?.anotacao || '';
+    campos.valorNegociacao.value = cliente?.valor_negociacao ?? '';
     document.getElementById('modal-cliente-titulo').textContent = cliente ? 'Editar cliente' : 'Novo cliente';
     btnRemover.classList.toggle('hidden', !cliente);
     openModal('modal-cliente');
@@ -292,6 +282,7 @@ export function initClientes() {
     }
   }
 
+  abrirModalClienteRef = abrirModal;
   busca.addEventListener('input', render);
 
   // Normaliza ao colar/digitar (e de novo ao salvar, por garantia).
@@ -311,6 +302,7 @@ export function initClientes() {
         dose: campos.dose.value.trim() || null,
         origem: campos.origem.value || null,
         anotacao: campos.anotacao.value.trim() || null,
+        valor_negociacao: campos.valorNegociacao.value ? Number(campos.valorNegociacao.value) : null,
       });
       closeModal('modal-cliente');
       toast('Salvo.');

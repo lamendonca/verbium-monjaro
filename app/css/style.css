@@ -291,12 +291,17 @@ select.form-input { appearance: none; }
 /* ============ Kanban (funil do Início) ============ */
 .kanban {
   display: flex;
+  align-items: flex-start; /* cada coluna com a própria altura */
   gap: 10px;
   overflow-x: auto;
   padding-bottom: 6px;
   margin-bottom: 6px;
   scroll-snap-type: x proximity;
 }
+.kanban::-webkit-scrollbar { height: 5px; }
+.kanban::-webkit-scrollbar-track { background: transparent; }
+.kanban::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.kanban { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
 .kanban-col {
   min-width: 220px;
   max-width: 240px;
@@ -307,6 +312,15 @@ select.form-input { appearance: none; }
   padding: 12px;
   box-shadow: var(--shadow);
   scroll-snap-align: start;
+}
+/* Desktop: as 6 fases cabem na tela — grade sem scroll horizontal */
+@media (min-width: 900px) {
+  .kanban {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    overflow-x: visible;
+  }
+  .kanban-col { min-width: 0; max-width: none; }
 }
 .kanban-col .col-title {
   display: flex;
