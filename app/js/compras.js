@@ -2,7 +2,7 @@
 // O lote É o estoque: qtd_disp é a verdade do disponível (business-rules.md §2).
 // Decremento de qtd_disp é feito por pedidos.js ao vincular pedidos — não aqui.
 
-import { list, insert, update, softDelete } from './db.js';
+import { db, list, insert, update, softDelete } from './db.js';
 import {
   el, renderInto, loadingState, emptyState, errorState,
   fmtMoney, fmtData, hojeISO, openModal, closeModal, toast,
@@ -22,6 +22,13 @@ export async function salvarLote(lote) {
   const patch = { ...lote, custo_unit: Math.round((lote.custo_total / lote.qtd) * 100) / 100 };
   if (lote.id) {
     const { id, ...resto } = patch;
+    // Corrigir a qtd do lote move o disponível junto (delta), senão as unidades
+    // a mais nunca ficam vendáveis e as a menos estouram o CHECK do banco.
+    const { data: atual, error } = await db.from('compras').select('qtd, qtd_disp').eq('id', id).single();
+    if (error) throw new Error(error.message);
+    const novoDisp = atual.qtd_disp + (lote.qtd - atual.qtd);
+    if (novoDisp < 0) throw new Error('qtd_menor_que_vendido');
+    resto.qtd_disp = novoDisp;
     return update('compras', id, resto);
   }
   return insert('compras', { ...patch, qtd_disp: patch.qtd });
@@ -119,8 +126,10 @@ export function initCompras() {
       closeModal('modal-lote');
       toast('Salvo.');
       refresh();
-    } catch {
-      toast('Não consegui salvar. Confere a conexão e tenta de novo.');
+    } catch (err) {
+      toast(err.message === 'qtd_menor_que_vendido'
+        ? 'Quantidade menor do que o já vendido nesse lote. Ajusta os pedidos antes.'
+        : 'Não consegui salvar. Confere a conexão e tenta de novo.');
     }
   });
 
