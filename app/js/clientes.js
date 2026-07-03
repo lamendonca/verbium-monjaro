@@ -68,7 +68,7 @@ export function whatsappLink(nome, contato) {
   let numero = (contato || '').replace(/\D/g, '');
   if (numero.length < 10) return null; // contato inválido — desabilitar botão
   if (numero.length <= 11) numero = `55${numero}`;
-  const texto = encodeURIComponent(`Oi ${nome}! Passando pra ver se você já vai querer repor o Monjaro. 😊`);
+  const texto = encodeURIComponent(`Oi ${nome}! Passando pra ver se você já vai querer repor o Mounjaro. 😊`);
   return `https://wa.me/${numero}?text=${texto}`;
 }
 

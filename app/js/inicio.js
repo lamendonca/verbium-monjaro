@@ -43,7 +43,7 @@ function abrirModalFollowup(cliente, onSave) {
   document.getElementById('followup-cliente').value = cliente.id;
   document.getElementById('followup-data').value = hojeISO();
   document.getElementById('followup-mensagem').value =
-    `Oi ${cliente.nome}! Passando pra ver se você já vai querer repor o Monjaro. 😊`;
+    `Oi ${cliente.nome}! Passando pra ver se você já vai querer repor o Mounjaro. 😊`;
   followupOnSave = onSave || null;
   openModal('modal-followup');
 }

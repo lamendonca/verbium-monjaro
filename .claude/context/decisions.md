@@ -1,4 +1,4 @@
-# Decisões registradas (ADRs) — Monjaro
+# Decisões registradas (ADRs) — Mounjaro
 
 Decisões tomadas no planejamento (chat-export). Cada uma vale até nova decisão registrada aqui. Convergidas a partir do framework herdado; onde diferem, prevalecem.
 
@@ -18,7 +18,7 @@ Data base: 2026-06-12
 
 **Decisão**: frontend em HTML/CSS/JS **vanilla** (sem framework, sem build), banco no **Supabase (Postgres)** schema `monjaro`, acesso direto via `@supabase/supabase-js`.
 **Por quê**: app de 3 tabelas, single-user, mobile-first. Framework JS/bundler seria peso sem ganho. Supabase entrega Postgres + API (PostgREST) sem manter backend.
-**Diverge do framework herdado** (Python/FastAPI/SQL Server): registrado em `framework.md`. O `CLAUDE.md` do Monjaro prevalece.
+**Diverge do framework herdado** (Python/FastAPI/SQL Server): registrado em `framework.md`. O `CLAUDE.md` do Mounjaro prevalece.
 
 ---
 

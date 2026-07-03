@@ -1,5 +1,5 @@
 -- =====================================================================
--- Monjaro — origem do cliente (maysa | lucas) e anotação livre.
+-- Mounjaro — origem do cliente (maysa | lucas) e anotação livre.
 -- Origem validada na aplicação (TEXT, como os demais domínios de valor).
 -- Idempotente.
 -- =====================================================================

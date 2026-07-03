@@ -1,4 +1,4 @@
-# Arquitetura — Monjaro
+# Arquitetura — Mounjaro
 
 App pessoal mobile-first. Não há backend próprio: o browser fala direto com o Supabase. O nginx só serve os arquivos estáticos e injeta a configuração de ambiente. Tudo roda num container.
 

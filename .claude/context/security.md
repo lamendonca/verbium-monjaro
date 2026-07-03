@@ -1,4 +1,4 @@
-# Segurança — Monjaro
+# Segurança — Mounjaro
 
 App pessoal, single-user, estático + Supabase. O modelo de segurança é diferente do framework herdado (que tinha backend, credenciais privilegiadas de AD/SQL e rede corporativa). Aqui o ponto sensível é: **a `anon key` e o `APP_TOKEN` vão para o browser**. Este documento explica o que isso significa e como proteger os dados.
 

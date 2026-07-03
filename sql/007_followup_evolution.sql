@@ -1,5 +1,5 @@
 -- =====================================================================
--- Monjaro — pilha Follow-up com envio automático via Evolution API.
+-- Mounjaro — pilha Follow-up com envio automático via Evolution API.
 -- Ao mover um cliente pra Follow-up, o operador escolhe data e mensagem;
 -- um job diário (pg_cron) envia as mensagens vencidas via pg_net direto
 -- pra instância Evolution e marca enviado_em. Ver business-rules.md §6.

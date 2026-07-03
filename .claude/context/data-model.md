@@ -1,4 +1,4 @@
-# Modelo de dados — Monjaro
+# Modelo de dados — Mounjaro
 
 Schema `monjaro` no Supabase (Postgres). Sem ORM — o schema (`sql/001_schema.sql`) é a fonte da verdade. Este documento explica cada tabela e a razão de cada decisão.
 

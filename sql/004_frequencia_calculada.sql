@@ -1,5 +1,5 @@
 -- =====================================================================
--- Monjaro — frequência de recompra calculada pelo histórico.
+-- Mounjaro — frequência de recompra calculada pelo histórico.
 -- clientes.frequencia vira estimativa inicial OPCIONAL: a partir da 2ª
 -- compra, a frequência efetiva é a média dos intervalos entre as datas
 -- (distintas) de pedidos do cliente, e prevalece sobre a estimativa.
