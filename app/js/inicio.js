@@ -116,15 +116,18 @@ function montarFunil(clientes, recompraMap, ultimoPedidoMap, followupMap) {
 async function moverCard(item, de, para, onChanged) {
   const { c, p } = item;
   try {
-    // sair do Follow-up cancela a mensagem agendada
-    if (de === 'followup' && para !== 'followup') await cancelarFollowup(c.id);
+    // Sair do Follow-up cancela a mensagem agendada — mas só DEPOIS do
+    // movimento se concretizar: recusar um confirm ou abandonar o modal
+    // não pode apagar um follow-up agendado em silêncio.
     if (para === 'followup') {
       if (de === 'perdido') await retomarCliente(c.id);
+      // agendarFollowup (no save do modal) já cancela o pendente anterior
       abrirModalFollowup(c, onChanged);
       return;
     }
     if (para === 'perdido') {
       if (!await confirmar(`Marcar ${c.nome} como perdido? Ele sai dos alertas por enquanto.`, { rotulo: 'Perdido' })) return;
+      await cancelarFollowup(c.id);
       await marcarPerdido(c.id);
       toast('Marcado como perdido.');
       return onChanged();
@@ -140,6 +143,7 @@ async function moverCard(item, de, para, onChanged) {
       } else {
         await marcarNegociacao(c.id);
       }
+      if (de === 'followup') await cancelarFollowup(c.id);
       toast('Em negociação.');
       return onChanged();
     }
@@ -149,7 +153,10 @@ async function moverCard(item, de, para, onChanged) {
       return novoPedidoParaCliente(c.id, {
         pagamento: para === 'pendente' ? 'pendente' : 'pago',
         entrega: para === 'entregue' ? 'entregue' : 'aguardando',
-        onSave: onChanged,
+        onSave: async () => {
+          if (de === 'followup') await cancelarFollowup(c.id);
+          onChanged();
+        },
       });
     }
     const patch = {};
@@ -163,6 +170,7 @@ async function moverCard(item, de, para, onChanged) {
       patch.entrega = 'entregue';
     }
     await update('pedidos', p.id, patch);
+    if (de === 'followup') await cancelarFollowup(c.id);
     toast('Movido.');
     onChanged();
   } catch (err) {
