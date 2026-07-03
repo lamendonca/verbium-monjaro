@@ -146,10 +146,10 @@ Perguntar **uma vez** com as opções mapeadas — não implementar suposição.
 - [x] Tela Lotes/Compras (CRUD + estoque disponível + aviso lote < 20)
 - [x] Tela Financeiro (lucro por lote e por cliente + consolidado)
 - [x] `docker compose up` validado servindo o app (nginx não-root, porta 8080 interna)
-- [ ] Schema aplicado no Supabase real (aguarda confirmação do projeto alvo)
+- [x] Schema aplicado no Supabase real (projeto `mendonca` / lfvjefvbxyrzediqcurt, migration `monjaro_001_schema`; RLS ligada nas 3 tabelas)
+- [x] `.env` com credenciais reais (URL + anon key do mendonca, APP_TOKEN gerado)
 - [ ] Policies RLS definidas (estratégia em `security.md`) — sem elas o app não lê/escreve
 - [ ] Expor schema `monjaro` na API (Dashboard → Settings → API → Exposed schemas)
-- [ ] `.env` com credenciais reais (hoje tem placeholders locais)
 
 > Estrutura: além dos módulos spec'ados existem `app/js/ui.js` (helpers de
 > apresentação compartilhados) e `app/js/inicio.js` (dashboard — compõe
