@@ -5,7 +5,7 @@ import { db, list, insert, update, softDelete, listView } from './db.js';
 import {
   el, renderInto, loadingState, emptyState, errorState,
   fmtData, fmtMoney, hojeISO, parseDateLocal, hojeLocal, diffDias,
-  openModal, closeModal, toast, submitOnce, onClickOnce,
+  openModal, closeModal, toast, submitOnce, onClickOnce, confirmar,
 } from './ui.js';
 
 export const listarClientes = () => list('clientes', { order: 'nome' });
@@ -162,7 +162,7 @@ export async function abrirDetalheCliente(cliente, { onEditar, onChanged } = {})
       : el('button', {
           class: 'btn btn-outline btn-sm',
           onclick: async () => {
-            if (!confirm(`${cliente.nome} não quer agora? Ele sai dos alertas e fica ${PERDIDO_DIAS_VISIVEL} dias no Perdido.`)) return;
+            if (!await confirmar(`${cliente.nome} não quer agora? Ele sai dos alertas e fica ${PERDIDO_DIAS_VISIVEL} dias no Perdido.`, { rotulo: 'Perdido' })) return;
             await marcarPerdido(cliente.id);
             toast('Marcado como perdido.');
             aposMudanca();
@@ -276,7 +276,7 @@ export function initClientes() {
   });
 
   onClickOnce(btnRemover, async () => {
-    if (!confirm(`Remover ${campos.nome.value}? Ele sai das listas, mas o histórico continua.`)) return;
+    if (!await confirmar(`Remover ${campos.nome.value}? Ele sai das listas, mas o histórico continua.`, { rotulo: 'Remover' })) return;
     try {
       await softDelete('clientes', campos.id.value);
       closeModal('modal-cliente');

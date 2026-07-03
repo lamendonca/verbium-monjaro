@@ -14,7 +14,7 @@ import { db, update, insert } from './db.js';
 import {
   el, renderInto, loadingState, emptyState, errorState, fmtMoney, fmtData,
   parseDateLocal, hojeLocal, diffDias, hojeISO, toast, openModal, closeModal,
-  submitOnce,
+  submitOnce, confirmar,
 } from './ui.js';
 
 // ---- Follow-up (mensagem automática via Evolution — business-rules.md §6) ----
@@ -120,7 +120,7 @@ async function moverCard(item, de, para, onChanged) {
       return;
     }
     if (para === 'perdido') {
-      if (!confirm(`Marcar ${c.nome} como perdido? Ele sai dos alertas por enquanto.`)) return;
+      if (!await confirmar(`Marcar ${c.nome} como perdido? Ele sai dos alertas por enquanto.`, { rotulo: 'Perdido' })) return;
       await marcarPerdido(c.id);
       toast('Marcado como perdido.');
       return onChanged();
@@ -130,7 +130,7 @@ async function moverCard(item, de, para, onChanged) {
         await retomarCliente(c.id);
       } else if (p && (de === 'pendente' || de === 'pago')) {
         // voltar pra negociação com pedido em aberto = cancelar o pedido
-        if (!confirm(`Voltar ${c.nome} pra negociação remove o pedido em aberto (estoque volta ao lote). Continuar?`)) return;
+        if (!await confirmar(`Voltar ${c.nome} pra negociação remove o pedido em aberto (o estoque volta ao lote). Continuar?`, { rotulo: 'Remover pedido' })) return;
         await removerPedido({ id: p.id, compra_id: p.compra_id, qtd: p.qtd });
         await marcarNegociacao(c.id);
       } else {
@@ -161,8 +161,8 @@ async function moverCard(item, de, para, onChanged) {
     await update('pedidos', p.id, patch);
     toast('Movido.');
     onChanged();
-  } catch {
-    toast('Não consegui mover. Tenta de novo.');
+  } catch (err) {
+    toast(`Não consegui mover: ${err.message}`);
   }
 }
 

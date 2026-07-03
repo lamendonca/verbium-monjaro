@@ -6,7 +6,7 @@ import { list, insert, update, softDelete } from './db.js';
 import {
   el, renderInto, loadingState, emptyState, errorState,
   fmtMoney, fmtData, hojeISO, openModal, closeModal, toast,
-  submitOnce, onClickOnce,
+  submitOnce, onClickOnce, confirmar,
 } from './ui.js';
 
 export const LOTE_MINIMO = 20;
@@ -126,7 +126,7 @@ export function initCompras() {
 
   onClickOnce(btnRemover, async () => {
     const ref = campos.referencia.value || 'este lote';
-    if (!confirm(`Remover ${ref}? Ele sai das listas, mas o histórico continua.`)) return;
+    if (!await confirmar(`Remover ${ref}? Ele sai das listas, mas o histórico continua.`, { rotulo: 'Remover' })) return;
     try {
       await softDelete('compras', campos.id.value);
       closeModal('modal-lote');

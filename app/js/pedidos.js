@@ -9,7 +9,7 @@ import { listarLotes } from './compras.js';
 import {
   el, renderInto, loadingState, emptyState, errorState,
   fmtMoney, fmtData, hojeISO, openModal, closeModal, toast,
-  submitOnce, onClickOnce,
+  submitOnce, onClickOnce, confirmar,
 } from './ui.js';
 
 const SELECT_PEDIDO = '*, cliente:cliente_id(nome), lote:compra_id(referencia, data)';
@@ -221,7 +221,7 @@ export function initPedidos() {
 
   onClickOnce(btnRemover, async () => {
     if (!emEdicao) return;
-    if (!confirm('Remover este pedido? Ele sai das listas e o estoque volta ao lote.')) return;
+    if (!await confirmar('Remover este pedido? Ele sai das listas e o estoque volta ao lote.', { rotulo: 'Remover' })) return;
     try {
       await removerPedido({ id: emEdicao.id, compra_id: emEdicao.compra_id, qtd: emEdicao.qtd });
       closeModal('modal-pedido');

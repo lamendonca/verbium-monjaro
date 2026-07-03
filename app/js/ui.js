@@ -75,6 +75,31 @@ document.addEventListener('click', (e) => {
   if (e.target.classList?.contains('modal-overlay')) e.target.classList.remove('open');
 });
 
+// ---- Confirmação estilizada (substitui window.confirm) ----
+export function confirmar(mensagem, { rotulo = 'Confirmar', perigo = true } = {}) {
+  return new Promise((resolve) => {
+    const fechar = (valor) => {
+      overlay.remove();
+      resolve(valor);
+    };
+    const overlay = el('div', { class: 'modal-overlay open' },
+      el('div', { class: 'modal', style: 'max-width: 480px; margin: 0 auto' },
+        el('div', { class: 'modal-handle' }),
+        el('div', { style: 'font-size: 15px; line-height: 1.45; margin: 4px 4px 18px' }, mensagem),
+        el('div', { style: 'display: flex; gap: 10px' },
+          el('button', { class: 'btn btn-outline', style: 'flex: 1', onclick: () => fechar(false) }, 'Cancelar'),
+          el('button', {
+            class: `btn ${perigo ? 'btn-danger' : 'btn-primary'}`,
+            style: 'flex: 1; width: auto',
+            onclick: () => fechar(true),
+          }, rotulo))));
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) fechar(false);
+    });
+    document.body.append(overlay);
+  });
+}
+
 // ---- Guardas de duplo-clique ----
 // Submit assíncrono: cliques durante o await disparariam novos inserts.
 // Ignora reentradas e desabilita os botões do form enquanto o handler roda.
