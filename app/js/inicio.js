@@ -3,12 +3,16 @@
 // Funil: fases derivadas do último pedido + status de recompra
 // (business-rules.md §8) — nenhum estado extra é persistido.
 
-import { listarClientes, recompraPorCliente, botaoWhatsApp } from './clientes.js';
+import {
+  listarClientes, recompraPorCliente, botaoWhatsApp, abrirDetalheCliente,
+  estaPerdido, retomarCliente, PERDIDO_DIAS_VISIVEL,
+} from './clientes.js';
 import { listarPedidos } from './pedidos.js';
 import { estoqueLivre } from './compras.js';
 import { consolidado } from './financeiro.js';
 import {
   el, renderInto, loadingState, emptyState, errorState, fmtMoney, fmtData,
+  parseDateLocal, hojeLocal, diffDias, toast,
 } from './ui.js';
 
 function itemAlerta(a) {
@@ -27,14 +31,21 @@ function itemAlerta(a) {
 }
 
 // ---- Funil (kanban) ----
-// Ordem de decisão por cliente: pedido em aberto > retomada por recompra >
-// descanso em "entregue". Cliente sem pedido = topo do funil.
+// Ordem de decisão por cliente: perdido > pedido em aberto > retomada por
+// recompra > descanso em "entregue". Cliente sem pedido = topo do funil.
+// Perdido fica visível por PERDIDO_DIAS_VISIVEL dias e some do funil
+// (e dos alertas) até novo pedido ou retomada manual.
 function montarFunil(clientes, recompraMap, ultimoPedidoMap) {
-  const fases = { nao_iniciada: [], pendente: [], pago: [], entregue: [] };
+  const fases = { nao_iniciada: [], pendente: [], pago: [], entregue: [], perdido: [] };
   for (const c of clientes) {
     const r = recompraMap.get(c.id);
     const p = ultimoPedidoMap.get(c.id);
-    if (!p) {
+    if (estaPerdido(c, r?.ultimo_pedido)) {
+      const dias = diffDias(hojeLocal(), parseDateLocal(c.perdido_em));
+      if (dias <= PERDIDO_DIAS_VISIVEL) {
+        fases.perdido.push({ c, sub: `não quis em ${fmtData(c.perdido_em)}`, retomar: true });
+      }
+    } else if (!p) {
       fases.nao_iniciada.push({ c, sub: 'novo — em negociação', urgencia: 1 });
     } else if (p.pagamento !== 'pago') {
       fases.pendente.push({ c, sub: `${fmtMoney(p.valor)} · pedido de ${fmtData(p.data)}` });
@@ -54,18 +65,38 @@ function montarFunil(clientes, recompraMap, ultimoPedidoMap) {
   return fases;
 }
 
-function cardFunil({ c, sub, whatsapp }) {
-  return el('div', { class: 'kanban-card' },
+function cardFunil({ c, sub, whatsapp, retomar }, onChanged) {
+  const acoes = [];
+  if (whatsapp) acoes.push(botaoWhatsApp(c.nome, c.contato));
+  if (retomar) {
+    acoes.push(el('button', {
+      class: 'btn btn-outline btn-sm',
+      onclick: async (e) => {
+        e.stopPropagation();
+        await retomarCliente(c.id);
+        toast('De volta ao funil.');
+        onChanged?.();
+      },
+    }, 'Retomar'));
+  }
+  return el('div', {
+    class: 'kanban-card',
+    style: 'cursor:pointer',
+    onclick: () => abrirDetalheCliente(c, { onChanged }),
+  },
     el('div', { class: 'title' }, c.nome),
     el('div', { class: 'sub' }, sub),
-    whatsapp ? el('div', { class: 'acao' }, botaoWhatsApp(c.nome, c.contato)) : null);
+    // stopPropagation: ações não devem abrir o detalhe do cliente junto.
+    acoes.length
+      ? el('div', { class: 'acao', style: 'display:flex; gap:6px', onclick: (e) => e.stopPropagation() }, acoes)
+      : null);
 }
 
-function colunaFunil(titulo, cards) {
+function colunaFunil(titulo, cards, onChanged) {
   return el('div', { class: 'kanban-col' },
     el('div', { class: 'col-title' }, titulo, el('span', { class: 'count' }, cards.length)),
     cards.length
-      ? cards.map(cardFunil)
+      ? cards.map((card) => cardFunil(card, onChanged))
       : el('div', { class: 'vazio' }, '—'));
 }
 
@@ -95,14 +126,18 @@ export function initInicio() {
       const recompraMap = new Map(recompra.map((r) => [r.cliente_id, r]));
       const fases = montarFunil(clientes, recompraMap, ultimoPedidoMap);
       renderInto(funilEl, [
-        colunaFunil('Não iniciada', fases.nao_iniciada),
-        colunaFunil('Pendente pagamento', fases.pendente),
-        colunaFunil('Pago', fases.pago),
-        colunaFunil('Entregue medicação', fases.entregue),
+        colunaFunil('Não iniciada', fases.nao_iniciada, refresh),
+        colunaFunil('Pendente pagamento', fases.pendente, refresh),
+        colunaFunil('Pago', fases.pago, refresh),
+        colunaFunil('Entregue medicação', fases.entregue, refresh),
+        colunaFunil('Perdido', fases.perdido, refresh),
       ]);
 
+      // Perdidos ficam fora dos alertas até novo pedido ou retomada.
+      const clientePorId = new Map(clientes.map((c) => [c.id, c]));
       const avisos = recompra
         .filter((r) => r.status === 'atrasado' || r.status === 'alerta')
+        .filter((r) => !estaPerdido(clientePorId.get(r.cliente_id) || {}, r.ultimo_pedido))
         .sort((a, b) => a.proxima_recompra.localeCompare(b.proxima_recompra));
       if (avisos.length) renderInto(listaAlertas, avisos.map(itemAlerta));
       else emptyState(listaAlertas, '🎉', 'Ninguém para acionar nos próximos 10 dias.');

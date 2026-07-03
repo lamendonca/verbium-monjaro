@@ -35,6 +35,7 @@ Quem compra. Cadastro mínimo (decisão do operador: só nome, contato e frequê
 | `contato` | TEXT NOT NULL | WhatsApp (usado no botão de acionamento) |
 | `frequencia` | INT NULL | estimativa inicial de **dias** entre recompras (opcional desde a `004`) |
 | `dose` | TEXT NULL | opcional, texto livre (não estruturado) |
+| `perdido_em` | DATE NULL | data em que o cliente recusou (funil "Perdido", migration `005`) |
 | `is_active` | BOOLEAN NOT NULL DEFAULT true | soft delete |
 | `created_at` | TIMESTAMPTZ DEFAULT NOW() | |
 | `updated_at` | TIMESTAMPTZ DEFAULT NOW() | trigger |

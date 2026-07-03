@@ -125,6 +125,7 @@ Fases **derivadas** dos dados — nenhum estado extra persistido. Por cliente at
 
 | Condição (1ª que casar) | Fase |
 |---|---|
+| **Perdido** (`perdido_em` setado, sem pedido posterior) | **Perdido** (visível por 14 dias; depois sai do funil) |
 | Sem nenhum pedido | **Não iniciada** ("novo — em negociação") |
 | Último pedido com `pagamento ≠ pago` | **Pendente pagamento** |
 | Último pedido pago e `entrega ≠ entregue` | **Pago** |
@@ -133,6 +134,11 @@ Fases **derivadas** dos dados — nenhum estado extra persistido. Por cliente at
 
 - Retomada pro funil é automática via alerta de recompra (§1); inclusão manual acontece ao cadastrar o cliente (entra sem pedido → Não iniciada).
 - "Não iniciada" ordena por urgência: atrasados → novos → alertas. "Entregue" ordena do mais recente.
+
+**Perdido** (`clientes.perdido_em`, migration `005`): cliente disse que não quer.
+- Marcado no detalhe do cliente (botão "Perdido"); sai dos **alertas** e da retomada automática.
+- Fica na coluna Perdido por `PERDIDO_DIAS_VISIVEL = 14` dias (constante em `clientes.js`); depois some do funil, mas continua fora dos alertas.
+- Volta ao ciclo com **novo pedido** (pedido com data posterior a `perdido_em` anula o perdido — sem write extra) ou pelo botão **Retomar** (limpa `perdido_em`).
 
 ## 7. Datas e fuso
 
