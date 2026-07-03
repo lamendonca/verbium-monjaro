@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <title>Gestão Monjaro</title>
+  <!-- Tema antes do primeiro paint (evita flash). Claro é o padrão. -->
+  <script>document.documentElement.dataset.theme = localStorage.getItem('monjaro.theme') || 'light';</script>
   <link rel="stylesheet" href="./css/style.css">
 </head>
 <body>
@@ -32,7 +34,10 @@
         <h1>Gestão Monjaro</h1>
         <div class="subtitle">vendas · estoque · recompra</div>
       </div>
-      <button id="btn-logout" class="btn-icon" aria-label="Sair">⏻</button>
+      <div style="display:flex; gap:8px">
+        <button id="btn-tema" class="btn-icon" aria-label="Alternar tema">🌙</button>
+        <button id="btn-logout" class="btn-icon" aria-label="Sair">⏻</button>
+      </div>
     </header>
 
     <main>
@@ -304,6 +309,18 @@
       document.getElementById('login-error').classList.toggle('hidden', ok);
       if (ok) iniciarApp();
     });
+
+    const btnTema = document.getElementById('btn-tema');
+    const iconeTema = () => {
+      btnTema.textContent = document.documentElement.dataset.theme === 'dark' ? '☀️' : '🌙';
+    };
+    btnTema.addEventListener('click', () => {
+      const novo = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+      document.documentElement.dataset.theme = novo;
+      localStorage.setItem('monjaro.theme', novo);
+      iconeTema();
+    });
+    iconeTema();
 
     document.getElementById('btn-logout').addEventListener('click', () => {
       logout();

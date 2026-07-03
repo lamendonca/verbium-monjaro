@@ -1,24 +1,54 @@
-/* Monjaro — design tokens + componentes. Contrato visual em brand.md. */
+/* Monjaro — design tokens + componentes. Contrato visual em brand.md.
+   Dois temas via html[data-theme]: claro (padrão) e escuro (paleta Dracula).
+   O tema é aplicado antes do primeiro paint por um script inline no <head>. */
 
-:root {
+:root,
+html[data-theme="light"] {
   /* Marca */
   --primary:      #6C63FF;
   --primary-dark: #5A52D5;
 
-  /* Status */
-  --success: #2ECC71;
-  --warning: #F39C12;
-  --danger:  #E74C3C;
+  /* Status (escurecidos p/ contraste sobre fundo claro) */
+  --success: #1FA85C;
+  --warning: #C07C10;
+  --danger:  #D93025;
 
-  /* Superfícies (dark) */
-  --dark:   #1A1A2E;
-  --card:   #16213E;
-  --card2:  #0F3460;
+  /* Superfícies */
+  --dark:   #F4F5FA;   /* fundo da página (nome mantido por compat.) */
+  --card:   #FFFFFF;
+  --card2:  #4E46C8;   /* par do gradiente do header */
 
   /* Texto e bordas */
-  --text:       #E0E0E0;
-  --text-muted: #8892A4;
-  --border:     #2A2A4A;
+  --text:       #1E2235;
+  --text-muted: #6B7285;
+  --border:     #E3E5F0;
+
+  --shadow: 0 1px 3px rgba(30, 34, 53, .08);
+  --on-primary: #FFFFFF;   /* texto sobre --primary */
+}
+
+html[data-theme="dark"] {
+  /* Marca (roxo Dracula) */
+  --primary:      #BD93F9;
+  --primary-dark: #A679F0;
+
+  /* Status (Dracula) */
+  --success: #50FA7B;
+  --warning: #FFB86C;
+  --danger:  #FF5555;
+
+  /* Superfícies (Dracula — suave, sem quase-preto) */
+  --dark:   #282A36;
+  --card:   #343746;
+  --card2:  #44475A;
+
+  /* Texto e bordas */
+  --text:       #F8F8F2;
+  --text-muted: #9AA5CE;
+  --border:     #44475A;
+
+  --shadow: none;
+  --on-primary: #282A36;   /* roxo Dracula é claro — texto escuro por cima */
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -96,6 +126,7 @@ body {
   border-radius: 16px;
   padding: 16px;
   margin-bottom: 12px;
+  box-shadow: var(--shadow);
 }
 .summary-grid {
   display: grid;
@@ -108,6 +139,7 @@ body {
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 14px;
+  box-shadow: var(--shadow);
 }
 .summary-card .label { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
 .summary-card .value { font-size: 22px; font-weight: 700; }
@@ -121,11 +153,11 @@ body {
   font-weight: 600;
   white-space: nowrap;
 }
-.badge-green  { background: rgba(46,204,113,.2);  color: var(--success); }
-.badge-yellow { background: rgba(243,156,18,.2);  color: var(--warning); }
-.badge-red    { background: rgba(231,76,60,.2);   color: var(--danger);  }
-.badge-purple { background: rgba(108,99,255,.2);  color: var(--primary); }
-.badge-gray   { background: rgba(136,146,164,.2); color: var(--text-muted); }
+.badge-green  { background: color-mix(in srgb, var(--success) 16%, transparent);    color: var(--success); }
+.badge-yellow { background: color-mix(in srgb, var(--warning) 16%, transparent);    color: var(--warning); }
+.badge-red    { background: color-mix(in srgb, var(--danger) 16%, transparent);     color: var(--danger);  }
+.badge-purple { background: color-mix(in srgb, var(--primary) 16%, transparent);    color: var(--primary); }
+.badge-gray   { background: color-mix(in srgb, var(--text-muted) 16%, transparent); color: var(--text-muted); }
 
 /* ============ Botões ============ */
 .btn {
@@ -142,20 +174,20 @@ body {
   justify-content: center;
   gap: 8px;
 }
-.btn-primary { background: var(--primary); color: #fff; width: 100%; }
+.btn-primary { background: var(--primary); color: var(--on-primary); width: 100%; }
 .btn-primary:active { background: var(--primary-dark); transform: scale(.98); }
 .btn-outline { background: transparent; color: var(--text); border: 1px solid var(--border); }
 .btn-danger  { background: var(--danger); color: #fff; }
 .btn-sm { min-height: 34px; padding: 0 12px; font-size: 13px; border-radius: 10px; }
 .btn-whatsapp {
-  background: rgba(46,204,113,.15);
+  background: color-mix(in srgb, var(--success) 14%, transparent);
   color: var(--success);
-  border: 1px solid rgba(46,204,113,.35);
+  border: 1px solid color-mix(in srgb, var(--success) 35%, transparent);
 }
 .btn-whatsapp:disabled { opacity: .4; }
 .btn-add {
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
   width: 40px; height: 40px; min-height: 40px;
   border-radius: 12px;
   font-size: 22px;
@@ -217,6 +249,7 @@ select.form-input { appearance: none; }
   border-radius: 16px;
   padding: 14px;
   margin-bottom: 10px;
+  box-shadow: var(--shadow);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -248,7 +281,7 @@ select.form-input { appearance: none; }
   white-space: nowrap;
   cursor: pointer;
 }
-.tab.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.tab.active { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
 
 /* ============ Barra de progresso (consumo do lote) ============ */
 .progress { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; margin-top: 8px; }

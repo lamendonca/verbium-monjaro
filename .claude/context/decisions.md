@@ -91,6 +91,15 @@ Data base: 2026-06-12
 
 ---
 
+## ADR-012 — Dois temas: claro padrão + dark Dracula (revisa ADR-009)
+
+**Data**: 2026-07-03
+**Contexto**: o operador achou o dark original (quase-preto azulado) escuro demais.
+**Decisão**: tema **claro como padrão** + tema **escuro estilo Dracula** (suave), alternados por toggle no header. Tokens por tema em `html[data-theme]`; escolha persistida em `localStorage['monjaro.theme']` e aplicada antes do primeiro paint. Texto sobre o primário usa `--on-primary` (o roxo Dracula é claro). Badges derivam fundo via `color-mix` para valerem nos dois temas.
+**Revisa**: ADR-009 ("dark por padrão, sem light mode no MVP") — mantém mobile-first e o roxo como cor de marca.
+
+---
+
 ## Pendências / decisões adiadas
 
 - **Pagamento parcial com valor**: hoje `parcial` conta como "a receber" inteiro. Se precisar do valor pago exato, adicionar `valor_pago` em migration `002`. Não implementar antes de pedido.
