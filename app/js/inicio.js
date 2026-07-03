@@ -74,6 +74,10 @@ function montarFunil(clientes, recompraMap, ultimoPedidoMap, followupMap) {
     const r = recompraMap.get(c.id);
     const p = ultimoPedidoMap.get(c.id);
     const f = followupMap.get(c.id);
+    // preço de referência pra negociar: o combinado agora > a última venda
+    const referencia = c.valor_negociacao != null
+      ? ` · negociando ${fmtMoney(c.valor_negociacao)}`
+      : (r?.ultimo_valor != null ? ` · última ${fmtMoney(r.ultimo_valor)}` : '');
     if (estaPerdido(c, r?.ultimo_pedido)) {
       const dias = diffDias(hojeLocal(), parseDateLocal(c.perdido_em));
       if (dias <= PERDIDO_DIAS_VISIVEL) {
@@ -82,22 +86,20 @@ function montarFunil(clientes, recompraMap, ultimoPedidoMap, followupMap) {
     } else if (f) {
       fases.followup.push({ c, p, f, sub: `mensagem em ${fmtData(f.data)}`, data: f.data });
     } else if (!p) {
-      fases.nao_iniciada.push({ c, sub: 'novo — em negociação', urgencia: 1 });
+      fases.nao_iniciada.push({ c, sub: `novo — em negociação${referencia}`, urgencia: 1 });
     } else if (p.pagamento !== 'pago') {
       fases.pendente.push({ c, p, sub: `${fmtMoney(p.valor)} · pedido de ${fmtData(p.data)}` });
     } else if (p.entrega !== 'entregue') {
       fases.pago.push({ c, p, sub: `${fmtMoney(p.valor)} · pago, separar/entregar` });
     } else if (c.negociacao_em && c.negociacao_em >= p.data) {
       // retomada manual (arrasto): em negociação até sair novo pedido
-      const ultima = r?.ultimo_valor != null ? ` · última ${fmtMoney(r.ultimo_valor)}` : '';
-      fases.nao_iniciada.push({ c, sub: `em negociação${ultima}`, urgencia: 1, whatsapp: true });
+      fases.nao_iniciada.push({ c, sub: `em negociação${referencia}`, urgencia: 1, whatsapp: true });
     } else if (r?.status === 'atrasado' || r?.status === 'alerta') {
       const quando = r.status === 'atrasado'
         ? `recompra atrasada há ${Math.abs(r.dias_restantes)} dia(s)`
         : `recompra em ${r.dias_restantes} dia(s)`;
-      const ultima = r.ultimo_valor != null ? ` · última ${fmtMoney(r.ultimo_valor)}` : '';
       // sem `p`: arrastar pra uma fase de pedido abre um pedido NOVO (novo ciclo)
-      fases.nao_iniciada.push({ c, sub: `${quando}${ultima}`, urgencia: r.status === 'atrasado' ? 0 : 2, whatsapp: true });
+      fases.nao_iniciada.push({ c, sub: `${quando}${referencia}`, urgencia: r.status === 'atrasado' ? 0 : 2, whatsapp: true });
     } else {
       fases.entregue.push({ c, p, sub: `entregue em ${fmtData(p.data)}`, data: p.data });
     }

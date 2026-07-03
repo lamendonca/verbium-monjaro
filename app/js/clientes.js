@@ -198,6 +198,28 @@ export async function abrirDetalheCliente(cliente, { onEditar, onChanged } = {})
           el('div', { class: 'label' }, 'Última venda'),
           el('div', { class: 'value', style: 'color: var(--primary)' },
             r?.ultimo_valor != null ? fmtMoney(r.ultimo_valor) : '—'))),
+      // Valor da negociação em andamento — editável direto no detalhe.
+      (() => {
+        const input = el('input', {
+          class: 'form-input', type: 'number', step: '0.01', min: '0',
+          placeholder: 'R$', value: cliente.valor_negociacao ?? '',
+        });
+        const btn = el('button', { class: 'btn btn-outline btn-sm' }, 'Salvar');
+        onClickOnce(btn, async () => {
+          try {
+            const valor = input.value ? Number(input.value) : null;
+            await update('clientes', cliente.id, { valor_negociacao: valor });
+            cliente.valor_negociacao = valor;
+            toast('Salvo.');
+            onChanged?.();
+          } catch {
+            toast('Não consegui salvar. Tenta de novo.');
+          }
+        });
+        return el('div', { class: 'form-group' },
+          el('label', { class: 'form-label' }, 'Valor da negociação atual'),
+          el('div', { style: 'display:flex; gap:8px; align-items:center' }, input, btn));
+      })(),
       el('div', { style: 'display:flex; gap:8px; margin-bottom:16px' },
         botaoWhatsApp(cliente.nome, cliente.contato),
         onEditar
