@@ -36,6 +36,9 @@ Quem compra. Cadastro mínimo (decisão do operador: só nome, contato e frequê
 | `frequencia` | INT NULL | estimativa inicial de **dias** entre recompras (opcional desde a `004`) |
 | `dose` | TEXT NULL | opcional, texto livre (não estruturado) |
 | `perdido_em` | DATE NULL | data em que o cliente recusou (funil "Perdido", migration `005`) |
+| `negociacao_em` | DATE NULL | retomada manual de negociação no funil (migration `006`) |
+| `origem` | TEXT NULL | quem trouxe o cliente: `maysa` · `lucas` (migration `008`) |
+| `anotacao` | TEXT NULL | anotação livre do operador (migration `008`) |
 | `is_active` | BOOLEAN NOT NULL DEFAULT true | soft delete |
 | `created_at` | TIMESTAMPTZ DEFAULT NOW() | |
 | `updated_at` | TIMESTAMPTZ DEFAULT NOW() | trigger |

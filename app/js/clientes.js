@@ -81,6 +81,10 @@ const badgeStatus = {
   sem_pedido: ['badge-gray', 'Sem pedido'],
 };
 
+const rotuloOrigem = { maysa: 'Maysa', lucas: 'Lucas' };
+const badgeOrigem = (origem) =>
+  origem ? el('span', { class: 'badge badge-purple' }, rotuloOrigem[origem] || origem) : null;
+
 export function botaoWhatsApp(nome, contato) {
   const link = whatsappLink(nome, contato);
   return el('button', {
@@ -105,6 +109,7 @@ function itemCliente(cliente, recompra, onEdit, onDetalhe) {
       el('div', { class: 'sub' }, `${freq}${ultimo}${cliente.dose ? ` · ${cliente.dose}` : ''}`),
       el('div', { class: 'badges' },
         el('span', { class: `badge ${cls}` }, label),
+        badgeOrigem(cliente.origem),
         perdido ? el('span', { class: 'badge badge-red' }, 'Perdido') : null)),
     el('div', { class: 'actions' },
       botaoWhatsApp(cliente.nome, cliente.contato),
@@ -173,9 +178,16 @@ export async function abrirDetalheCliente(cliente, { onEditar, onChanged } = {})
       el('div', { class: 'modal-title', style: 'margin-bottom:4px' }, cliente.nome),
       el('div', { class: 'sub', style: 'color:var(--text-muted); font-size:13px' },
         `${cliente.contato}${r?.frequencia ? ` · a cada ${r.frequencia} dias` : ''}${cliente.dose ? ` · ${cliente.dose}` : ''}`),
-      el('div', { class: 'badges', style: 'display:flex; gap:6px; margin:10px 0 14px' },
+      el('div', { class: 'badges', style: 'display:flex; gap:6px; margin:10px 0 14px; flex-wrap:wrap' },
         el('span', { class: `badge ${cls}` }, label),
+        badgeOrigem(cliente.origem),
         perdido ? el('span', { class: 'badge badge-red' }, `Perdido em ${fmtData(cliente.perdido_em)}`) : null),
+      cliente.anotacao
+        ? el('div', {
+            class: 'card',
+            style: 'padding:10px 12px; font-size:13px; color:var(--text-muted); margin-bottom:14px',
+          }, cliente.anotacao)
+        : null,
       el('div', { class: 'summary-grid' },
         el('div', { class: 'summary-card' },
           el('div', { class: 'label' }, 'Compras'), el('div', { class: 'value' }, pedidos.length)),
@@ -210,6 +222,8 @@ export function initClientes() {
     contato: document.getElementById('cliente-contato'),
     frequencia: document.getElementById('cliente-frequencia'),
     dose: document.getElementById('cliente-dose'),
+    origem: document.getElementById('cliente-origem'),
+    anotacao: document.getElementById('cliente-anotacao'),
   };
   const btnRemover = document.getElementById('btn-remover-cliente');
   let cache = { clientes: [], recompra: new Map() };
@@ -221,6 +235,8 @@ export function initClientes() {
     campos.contato.value = cliente?.contato || '';
     campos.frequencia.value = cliente?.frequencia ?? '';
     campos.dose.value = cliente?.dose || '';
+    campos.origem.value = cliente?.origem || '';
+    campos.anotacao.value = cliente?.anotacao || '';
     document.getElementById('modal-cliente-titulo').textContent = cliente ? 'Editar cliente' : 'Novo cliente';
     btnRemover.classList.toggle('hidden', !cliente);
     openModal('modal-cliente');
@@ -266,6 +282,8 @@ export function initClientes() {
         contato: normalizarContato(campos.contato.value),
         frequencia: campos.frequencia.value ? Number(campos.frequencia.value) : null,
         dose: campos.dose.value.trim() || null,
+        origem: campos.origem.value || null,
+        anotacao: campos.anotacao.value.trim() || null,
       });
       closeModal('modal-cliente');
       toast('Salvo.');

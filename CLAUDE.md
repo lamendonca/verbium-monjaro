@@ -66,7 +66,7 @@ monjaro/
 
 ## Schema — `monjaro.*` (resumo; fonte da verdade: `data-model.md` + `sql/001_schema.sql`)
 
-- `clientes` — `nome`, `contato` (WhatsApp), `frequencia` (estimativa opcional; efetiva é calculada do histórico), `dose` (opcional), `perdido_em`/`negociacao_em` (funil).
+- `clientes` — `nome`, `contato` (WhatsApp), `frequencia` (estimativa opcional; efetiva é calculada do histórico), `dose` (opcional), `perdido_em`/`negociacao_em` (funil), `origem` (maysa|lucas), `anotacao`.
 - `followups` — mensagens agendadas: FK `cliente_id`, `data`, `mensagem`, `enviado_em` (envio via Evolution/pg_cron). `config` — credenciais (RLS deny; anon não lê).
 - `compras` — lotes do fornecedor: `qtd`, `qtd_disp` (decrementa a cada pedido), `custo_total`, `custo_unit`, `pagamento`, `chegada`, `referencia`.
 - `pedidos` — venda: FK `cliente_id`, FK `compra_id` (lote de baixa, nullable), `valor`, `pagamento`, `entrega`.
