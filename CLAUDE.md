@@ -135,18 +135,25 @@ Perguntar **uma vez** com as opções mapeadas — não implementar suposição.
 - [x] `sql/001_schema.sql` (clientes, compras, pedidos + índices + views)
 - [x] Stubs de `app/` (index.html, css/style.css, js/* com docblocks de spec)
 
-### Implementação (a fazer)
-- [ ] `app/js/config.js` + injeção de env pelo nginx
-- [ ] `app/js/db.js` (porta única Supabase)
-- [ ] `app/js/auth.js` (login por APP_TOKEN)
-- [ ] `app/index.html` + `app/css/style.css` (shell mobile, bottom-nav, dark)
-- [ ] Tela Início (dashboard de alertas + KPIs)
-- [ ] Tela Clientes (CRUD + WhatsApp + status de recompra)
-- [ ] Tela Pedidos (CRUD + vínculo a lote + baixa de estoque)
-- [ ] Tela Lotes/Compras (CRUD + estoque disponível)
-- [ ] Tela Financeiro (lucro por lote e por cliente)
-- [ ] `docker compose up` validado servindo o app
-- [ ] Schema aplicado no Supabase real
+### Implementação
+- [x] `app/js/config.js` + injeção de env pelo nginx
+- [x] `app/js/db.js` (porta única Supabase + helpers list/insert/update/softDelete)
+- [x] `app/js/auth.js` (login por APP_TOKEN — digest SHA-256, comparação constante)
+- [x] `app/index.html` + `app/css/style.css` (shell mobile, bottom-nav, dark)
+- [x] Tela Início (dashboard de alertas + KPIs) — `app/js/inicio.js`
+- [x] Tela Clientes (CRUD + WhatsApp + status de recompra)
+- [x] Tela Pedidos (CRUD + vínculo a lote + baixa/devolução de estoque)
+- [x] Tela Lotes/Compras (CRUD + estoque disponível + aviso lote < 20)
+- [x] Tela Financeiro (lucro por lote e por cliente + consolidado)
+- [x] `docker compose up` validado servindo o app (nginx não-root, porta 8080 interna)
+- [ ] Schema aplicado no Supabase real (aguarda confirmação do projeto alvo)
+- [ ] Policies RLS definidas (estratégia em `security.md`) — sem elas o app não lê/escreve
+- [ ] Expor schema `monjaro` na API (Dashboard → Settings → API → Exposed schemas)
+- [ ] `.env` com credenciais reais (hoje tem placeholders locais)
+
+> Estrutura: além dos módulos spec'ados existem `app/js/ui.js` (helpers de
+> apresentação compartilhados) e `app/js/inicio.js` (dashboard — compõe
+> clientes/compras/financeiro, conforme mapa tela→módulo do `ui.md`).
 
 ## Para aprofundar
 
