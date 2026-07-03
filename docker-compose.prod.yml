@@ -1,0 +1,44 @@
+# Monjaro — produção no VPS (Hostinger) atrás do Traefik existente.
+# Uso:  docker compose -f docker-compose.prod.yml up -d --build
+# Pré-requisitos: rede externa `traefik-network` (a do Traefik) e .env
+# preenchido (SUPABASE_URL, SUPABASE_ANON_KEY, APP_TOKEN, ENV=production).
+# O domínio abaixo usa o wildcard *.srv1442954.hstgr.cloud da Hostinger —
+# troque se apontar um domínio próprio.
+services:
+  monjaro:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - SUPABASE_URL
+      - SUPABASE_ANON_KEY
+      - APP_TOKEN
+      - ENV
+    networks:
+      - traefik-network
+    # sem `ports`: só o Traefik alcança o container (TLS terminado nele)
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.monjaro.rule=Host(`monjaro.srv1442954.hstgr.cloud`)
+      - traefik.http.routers.monjaro.entrypoints=websecure
+      - traefik.http.routers.monjaro.tls.certresolver=letsencrypt
+      - traefik.http.services.monjaro.loadbalancer.server.port=8080
+    # hardening (igual ao compose local — ver security.md)
+    user: "101:101"
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:uid=101,gid=101
+      - /var/cache/nginx:uid=101,gid=101
+      - /var/run:uid=101,gid=101
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+networks:
+  traefik-network:
+    external: true
