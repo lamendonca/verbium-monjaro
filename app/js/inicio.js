@@ -230,7 +230,9 @@ function tornarArrastavel(card, item, fase, onChanged) {
 
   const levantar = (pointerId) => {
     arrastando = true;
-    card.setPointerCapture(pointerId);
+    // iOS Safari pode recusar captura fora do handler do evento — o arrasto
+    // funciona mesmo sem ela (touchmove segue mirando o card de origem)
+    try { card.setPointerCapture(pointerId); } catch { /* segue sem captura */ }
     const r = card.getBoundingClientRect();
     ghost = card.cloneNode(true);
     Object.assign(ghost.style, {
@@ -275,7 +277,7 @@ function tornarArrastavel(card, item, fase, onChanged) {
     atualizarAlvo(e.clientX, e.clientY);
   });
 
-  const soltar = () => {
+  const soltar = (aplicar) => {
     const estava = arrastando;
     arrastando = false;
     armado = null;
@@ -283,12 +285,14 @@ function tornarArrastavel(card, item, fase, onChanged) {
     if (estava) {
       card.dataset.arrastou = '1'; // suprime o clique que fecha o gesto
       setTimeout(() => delete card.dataset.arrastou, 300);
-      if (alvo && alvo !== fase) moverCard(item, fase, alvo, onChanged);
+      if (aplicar && alvo && alvo !== fase) moverCard(item, fase, alvo, onChanged);
     }
     alvo = null;
   };
-  card.addEventListener('pointerup', soltar);
-  card.addEventListener('pointercancel', soltar);
+  card.addEventListener('pointerup', () => soltar(true));
+  // cancel (iOS converte gesto em rolagem, ligação, etc.) = abortar,
+  // nunca aplicar o movimento pela última coluna tocada
+  card.addEventListener('pointercancel', () => soltar(false));
 }
 
 function cardFunil(item, fase, onChanged) {
