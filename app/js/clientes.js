@@ -439,15 +439,46 @@ export function initClientes() {
     if (!arquivo) return;
     const leitor = new FileReader();
     leitor.onload = () => {
-      const linhas = String(leitor.result).split(/\r?\n/).filter((l) => l.trim());
-      const itens = linhas
-        .map((l) => l.split(/[;,]/))
-        .filter((cols) => cols.length >= 2 && !/^nome$/i.test(cols[0].trim()))
-        .map((cols) => ({ nome: cols[0], contato: cols[1] }));
-      importarLista(itens);
+      const texto = String(leitor.result);
+      importarLista(/BEGIN:VCARD/i.test(texto) ? parseVcf(texto) : parseCsv(texto));
     };
     leitor.readAsText(arquivo);
   });
+
+  function parseCsv(texto) {
+    return texto.split(/\r?\n/)
+      .filter((l) => l.trim())
+      .map((l) => l.split(/[;,]/))
+      .filter((cols) => cols.length >= 2 && !/^nome$/i.test(cols[0].trim()))
+      .map((cols) => ({ nome: cols[0], contato: cols[1] }));
+  }
+
+  // vCard (.vcf) — como o iPhone compartilha contatos (Safari não tem
+  // Contact Picker). Trata linhas dobradas e quoted-printable de nomes.
+  function parseVcf(texto) {
+    const decodificar = (linha) => {
+      let v = linha.slice(linha.indexOf(':') + 1).trim();
+      if (/QUOTED-PRINTABLE/i.test(linha)) {
+        try { v = decodeURIComponent(v.replace(/=([0-9A-F]{2})/gi, '%$1')); } catch { /* mantém cru */ }
+      }
+      return v;
+    };
+    const itens = [];
+    let atual = null;
+    for (const l of texto.replace(/\r?\n[ \t]/g, '').split(/\r?\n/)) {
+      if (/^BEGIN:VCARD/i.test(l)) {
+        atual = { nome: '', nomeAlt: '', contato: '' };
+      } else if (/^END:VCARD/i.test(l)) {
+        if (atual) itens.push({ nome: atual.nome || atual.nomeAlt, contato: atual.contato });
+        atual = null;
+      } else if (atual) {
+        if (/^FN[;:]/i.test(l)) atual.nome = decodificar(l);
+        else if (/^N[;:]/i.test(l)) atual.nomeAlt = decodificar(l).split(';').filter(Boolean).reverse().join(' ').trim();
+        else if (/^TEL[;:]/i.test(l) && !atual.contato) atual.contato = decodificar(l);
+      }
+    }
+    return itens;
+  }
 
   onClickOnce(document.getElementById('btn-importar-clientes'), async () => {
     if (navigator.contacts?.select) {
@@ -456,6 +487,8 @@ export function initClientes() {
         await importarLista(contatos.map((ct) => ({ nome: ct.name?.[0], contato: ct.tel?.[0] })));
       } catch { /* seleção cancelada */ }
     } else {
+      // iOS/desktop: sem Contact Picker — arquivo .vcf (Contatos → Compartilhar) ou .csv
+      toast('Escolhe um arquivo .vcf (contatos compartilhados) ou .csv.');
       csvInput.click();
     }
   });
