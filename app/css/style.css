@@ -348,6 +348,10 @@ select.form-input { appearance: none; }
   margin-bottom: 8px;
   user-select: none;
   -webkit-user-select: none;
+  /* iOS Safari: sem isto o long-press abre o callout/lupa do sistema e
+     rouba o gesto antes do card levantar */
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
 }
 .kanban-col.drop-alvo {
   border-color: var(--primary);
