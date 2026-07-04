@@ -6,6 +6,7 @@
 import {
   listarClientes, recompraPorCliente, botaoWhatsApp, abrirDetalheCliente,
   estaPerdido, marcarPerdido, retomarCliente, marcarNegociacao, PERDIDO_DIAS_VISIVEL,
+  cancelarFollowupsPendentes, registrarMoverFase,
 } from './clientes.js';
 import { listarPedidos, novoPedidoParaCliente, removerPedido } from './pedidos.js';
 import { estoqueLivre } from './compras.js';
@@ -25,15 +26,8 @@ async function followupsPendentes() {
   return data;
 }
 
-async function cancelarFollowup(clienteId) {
-  const { error } = await db.from('followups')
-    .update({ is_active: false })
-    .eq('cliente_id', clienteId).eq('is_active', true).is('enviado_em', null);
-  if (error) throw new Error(error.message);
-}
-
 async function agendarFollowup(clienteId, data, mensagem) {
-  await cancelarFollowup(clienteId); // um pendente por cliente
+  await cancelarFollowupsPendentes(clienteId); // um pendente por cliente
   return insert('followups', { cliente_id: clienteId, data, mensagem });
 }
 
@@ -116,15 +110,18 @@ function montarFunil(clientes, recompraMap, ultimoPedidoMap, followupMap) {
 async function moverCard(item, de, para, onChanged) {
   const { c, p } = item;
   try {
-    // sair do Follow-up cancela a mensagem agendada
-    if (de === 'followup' && para !== 'followup') await cancelarFollowup(c.id);
+    // Sair do Follow-up cancela a mensagem agendada — mas só DEPOIS do
+    // movimento se concretizar: recusar um confirm ou abandonar o modal
+    // não pode apagar um follow-up agendado em silêncio.
     if (para === 'followup') {
       if (de === 'perdido') await retomarCliente(c.id);
+      // agendarFollowup (no save do modal) já cancela o pendente anterior
       abrirModalFollowup(c, onChanged);
       return;
     }
     if (para === 'perdido') {
       if (!await confirmar(`Marcar ${c.nome} como perdido? Ele sai dos alertas por enquanto.`, { rotulo: 'Perdido' })) return;
+      await cancelarFollowupsPendentes(c.id);
       await marcarPerdido(c.id);
       toast('Marcado como perdido.');
       return onChanged();
@@ -140,6 +137,7 @@ async function moverCard(item, de, para, onChanged) {
       } else {
         await marcarNegociacao(c.id);
       }
+      if (de === 'followup') await cancelarFollowupsPendentes(c.id);
       toast('Em negociação.');
       return onChanged();
     }
@@ -149,7 +147,10 @@ async function moverCard(item, de, para, onChanged) {
       return novoPedidoParaCliente(c.id, {
         pagamento: para === 'pendente' ? 'pendente' : 'pago',
         entrega: para === 'entregue' ? 'entregue' : 'aguardando',
-        onSave: onChanged,
+        onSave: async () => {
+          if (de === 'followup') await cancelarFollowupsPendentes(c.id);
+          onChanged();
+        },
       });
     }
     const patch = {};
@@ -163,6 +164,7 @@ async function moverCard(item, de, para, onChanged) {
       patch.entrega = 'entregue';
     }
     await update('pedidos', p.id, patch);
+    if (de === 'followup') await cancelarFollowupsPendentes(c.id);
     toast('Movido.');
     onChanged();
   } catch (err) {
@@ -180,14 +182,42 @@ function tornarArrastavel(card, item, fase, onChanged) {
   let alvo = null;
   let sx = 0;
   let sy = 0;
+  let px = 0; // última posição do ponteiro (auto-scroll)
+  let py = 0;
+  let raf = null;
 
   const limpar = () => {
     clearTimeout(timer);
     timer = null;
+    cancelAnimationFrame(raf);
+    raf = null;
     ghost?.remove();
     ghost = null;
     card.style.opacity = '';
     document.querySelectorAll('.kanban-col.drop-alvo').forEach((col) => col.classList.remove('drop-alvo'));
+  };
+
+  const atualizarAlvo = (x, y) => {
+    const col = document.elementFromPoint(x, y)?.closest('.kanban-col');
+    document.querySelectorAll('.kanban-col.drop-alvo').forEach((c2) => c2.classList.remove('drop-alvo'));
+    alvo = col?.dataset.fase || null;
+    if (col && alvo !== fase) col.classList.add('drop-alvo');
+  };
+
+  // No mobile só ~1,5 coluna aparece: sem isto não dá pra alcançar as outras
+  // fases arrastando. Card parado na borda rola o kanban sozinho (no desktop
+  // em grade, scrollLeft é no-op inofensivo).
+  const autoScroll = () => {
+    if (!arrastando) return;
+    const kanban = card.closest('.kanban');
+    if (kanban) {
+      const r = kanban.getBoundingClientRect();
+      const zona = 56;
+      if (px > r.right - zona) kanban.scrollLeft += 14;
+      else if (px < r.left + zona) kanban.scrollLeft -= 14;
+      atualizarAlvo(px, py); // o scroll muda a coluna sob o dedo
+    }
+    raf = requestAnimationFrame(autoScroll);
   };
 
   card.addEventListener('contextmenu', (e) => {
@@ -211,6 +241,7 @@ function tornarArrastavel(card, item, fase, onChanged) {
     document.body.append(ghost);
     card.style.opacity = .35;
     navigator.vibrate?.(15);
+    raf = requestAnimationFrame(autoScroll);
   };
 
   card.addEventListener('pointerdown', (e) => {
@@ -225,6 +256,8 @@ function tornarArrastavel(card, item, fase, onChanged) {
   });
 
   card.addEventListener('pointermove', (e) => {
+    px = e.clientX;
+    py = e.clientY;
     if (!arrastando) {
       const distancia = Math.hypot(e.clientX - sx, e.clientY - sy);
       if (armado !== null && distancia > 5) {
@@ -239,10 +272,7 @@ function tornarArrastavel(card, item, fase, onChanged) {
     }
     ghost.style.left = `${e.clientX - ghost.offsetWidth / 2}px`;
     ghost.style.top = `${e.clientY - 20}px`;
-    const col = document.elementFromPoint(e.clientX, e.clientY)?.closest('.kanban-col');
-    document.querySelectorAll('.kanban-col.drop-alvo').forEach((c2) => c2.classList.remove('drop-alvo'));
-    alvo = col?.dataset.fase || null;
-    if (col && alvo !== fase) col.classList.add('drop-alvo');
+    atualizarAlvo(e.clientX, e.clientY);
   });
 
   const soltar = () => {
@@ -298,6 +328,11 @@ function colunaFunil(titulo, fase, cards, onChanged) {
       : el('div', { class: 'vazio' }, '—'));
 }
 
+// Fase atual e item de cada cliente no funil — atualizado a cada refresh;
+// usado pelo "Mover no funil" do detalhe do cliente.
+let indiceFunil = new Map();
+let ultimoPedidoAtual = new Map();
+
 export function initInicio() {
   const listaAlertas = document.getElementById('lista-alertas');
   const funilEl = document.getElementById('funil');
@@ -341,6 +376,11 @@ export function initInicio() {
       const recompraMap = new Map(recompra.map((r) => [r.cliente_id, r]));
       const followupMap = new Map(followups.map((f) => [f.cliente_id, f]));
       const fases = montarFunil(clientes, recompraMap, ultimoPedidoMap, followupMap);
+      indiceFunil = new Map();
+      for (const [faseKey, itens] of Object.entries(fases)) {
+        for (const it of itens) indiceFunil.set(it.c.id, { item: it, fase: faseKey });
+      }
+      ultimoPedidoAtual = ultimoPedidoMap;
       renderInto(funilEl, [
         colunaFunil('Não iniciada', 'nao_iniciada', fases.nao_iniciada, refresh),
         colunaFunil('Follow-up', 'followup', fases.followup, refresh),
@@ -363,6 +403,15 @@ export function initInicio() {
       errorState(listaAlertas);
     }
   }
+
+  registrarMoverFase(async (cliente, para) => {
+    const atual = indiceFunil.get(cliente.id);
+    // fora do funil (ex.: perdido expirado): trata como descanso pós-entrega
+    const de = atual?.fase || 'entregue';
+    if (de === para) return toast('Já está nessa fase.');
+    const item = atual?.item || { c: cliente, p: ultimoPedidoAtual.get(cliente.id) };
+    await moverCard(item, de, para, refresh);
+  });
 
   return refresh;
 }

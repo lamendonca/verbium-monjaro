@@ -60,8 +60,13 @@
       <section id="page-clientes" class="page">
         <div class="page-title-row">
           <div class="page-title">Clientes</div>
-          <button class="btn btn-add" id="btn-novo-cliente" aria-label="Novo cliente">+</button>
+          <div style="display:flex; gap:8px">
+            <button class="btn btn-outline btn-sm" id="btn-importar-clientes" style="min-height:40px">Importar</button>
+            <button class="btn btn-add" id="btn-novo-cliente" aria-label="Novo cliente">+</button>
+          </div>
         </div>
+        <!-- fallback quando não há Contact Picker (desktop): CSV nome,contato -->
+        <input type="file" id="csv-clientes" accept=".csv,text/csv" class="hidden">
         <div class="form-group">
           <input type="search" id="busca-clientes" class="form-input" placeholder="Buscar por nome...">
         </div>

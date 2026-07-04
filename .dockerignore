@@ -1,0 +1,16 @@
+# A imagem só precisa de app/, nginx/ e Dockerfile.
+# Nunca deixar segredos ou artefatos locais entrarem no build context (WR-08).
+.git
+.gitignore
+.gitattributes
+.env
+.env.*
+app/env.js
+.claude
+.planning
+ruvector.db
+REVIEW.md
+*.md
+docker-compose*.yml
+sql
+apresentacao.html

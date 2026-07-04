@@ -51,6 +51,16 @@ export function estaPerdido(cliente, ultimoPedidoISO) {
 export const marcarPerdido = (id) => update('clientes', id, { perdido_em: hojeISO() });
 export const retomarCliente = (id) => update('clientes', id, { perdido_em: null });
 
+// Cancela follow-ups agendados e ainda não enviados do cliente. Vive aqui
+// (e não em inicio.js) pra todo caminho que marca perdido poder cancelar
+// sem criar import circular — inicio.js já importa deste módulo.
+export async function cancelarFollowupsPendentes(clienteId) {
+  const { error } = await db.from('followups')
+    .update({ is_active: false })
+    .eq('cliente_id', clienteId).eq('is_active', true).is('enviado_em', null);
+  if (error) throw new Error(error.message);
+}
+
 // Retomada manual de negociação (arrasto pra "Não iniciada"). Um pedido
 // posterior encerra a negociação — derivado, sem write extra.
 export const marcarNegociacao = (id) =>
@@ -163,6 +173,22 @@ function itemHistorico(p) {
 // Registrado por initClientes — permite Editar a partir de qualquer tela.
 let abrirModalClienteRef = null;
 
+// Registrado por initInicio — mover de fase no funil a partir do detalhe,
+// sem import circular (inicio.js já importa este módulo).
+let moverFaseRef = null;
+export function registrarMoverFase(fn) {
+  moverFaseRef = fn;
+}
+
+const FASES_FUNIL = [
+  ['nao_iniciada', 'Não iniciada'],
+  ['followup', 'Follow-up'],
+  ['pendente', 'Pendente pagamento'],
+  ['pago', 'Pago'],
+  ['entregue', 'Entregue'],
+  ['perdido', 'Perdido'],
+];
+
 export async function abrirDetalheCliente(cliente, { onEditar, onChanged } = {}) {
   const corpo = document.getElementById('detalhe-corpo');
   openModal('modal-detalhe');
@@ -194,6 +220,8 @@ export async function abrirDetalheCliente(cliente, { onEditar, onChanged } = {})
           class: 'btn btn-outline btn-sm',
           onclick: async () => {
             if (!await confirmar(`${cliente.nome} não quer agora? Ele sai dos alertas e fica ${PERDIDO_DIAS_VISIVEL} dias no Perdido.`, { rotulo: 'Perdido' })) return;
+            // sem isso, o pg_cron enviaria mensagem automática a quem recusou
+            await cancelarFollowupsPendentes(cliente.id);
             await marcarPerdido(cliente.id);
             toast('Marcado como perdido.');
             aposMudanca();
@@ -240,6 +268,19 @@ export async function abrirDetalheCliente(cliente, { onEditar, onChanged } = {})
             : null;
         })(),
         btnPerdido),
+      moverFaseRef
+        ? el('div', { style: 'margin-bottom:16px' },
+            el('div', { class: 'form-label' }, 'Mover no funil'),
+            el('div', { class: 'tabs', style: 'margin-bottom:0' },
+              FASES_FUNIL.map(([faseKey, rotulo]) => el('button', {
+                class: 'tab',
+                onclick: async () => {
+                  closeModal('modal-detalhe');
+                  await moverFaseRef(cliente, faseKey);
+                  onChanged?.();
+                },
+              }, rotulo))))
+        : null,
       el('div', { class: 'section-title', style: 'margin-top:0' }, 'Histórico de pedidos'),
       pedidos.length
         ? el('div', {}, pedidos.map(itemHistorico))
@@ -359,6 +400,63 @@ export function initClientes() {
       refresh();
     } catch {
       toast('Não consegui salvar. Confere a conexão e tenta de novo.');
+    }
+  });
+
+  // ---- Importar contatos ----
+  // Celular (Chrome/Android): Contact Picker nativo. Sem suporte: CSV
+  // com colunas nome,contato. Duplicados (mesmos dígitos) são pulados.
+  async function importarLista(itens) {
+    const existentes = new Set(
+      (await listarClientes()).map((c) => c.contato.replace(/\D/g, '')),
+    );
+    const vistos = new Set();
+    const novos = itens
+      .map((i) => ({ nome: (i.nome || '').trim(), contato: normalizarContato(i.contato || '') }))
+      .filter((i) => {
+        const digitos = i.contato.replace(/\D/g, '');
+        if (!i.nome || digitos.length < 10 || existentes.has(digitos) || vistos.has(digitos)) return false;
+        vistos.add(digitos);
+        return true;
+      });
+    if (!novos.length) return toast('Nenhum contato novo pra importar.');
+    if (!await confirmar(`Importar ${novos.length} contato(s) como clientes?`, { rotulo: 'Importar', perigo: false })) return;
+    let ok = 0;
+    for (const n of novos) {
+      try {
+        await insert('clientes', { nome: n.nome, contato: n.contato });
+        ok += 1;
+      } catch { /* segue os demais; o total informa o resultado */ }
+    }
+    toast(`${ok} de ${novos.length} contato(s) importado(s).`);
+    refresh();
+  }
+
+  const csvInput = document.getElementById('csv-clientes');
+  csvInput.addEventListener('change', () => {
+    const arquivo = csvInput.files?.[0];
+    csvInput.value = '';
+    if (!arquivo) return;
+    const leitor = new FileReader();
+    leitor.onload = () => {
+      const linhas = String(leitor.result).split(/\r?\n/).filter((l) => l.trim());
+      const itens = linhas
+        .map((l) => l.split(/[;,]/))
+        .filter((cols) => cols.length >= 2 && !/^nome$/i.test(cols[0].trim()))
+        .map((cols) => ({ nome: cols[0], contato: cols[1] }));
+      importarLista(itens);
+    };
+    leitor.readAsText(arquivo);
+  });
+
+  onClickOnce(document.getElementById('btn-importar-clientes'), async () => {
+    if (navigator.contacts?.select) {
+      try {
+        const contatos = await navigator.contacts.select(['name', 'tel'], { multiple: true });
+        await importarLista(contatos.map((ct) => ({ nome: ct.name?.[0], contato: ct.tel?.[0] })));
+      } catch { /* seleção cancelada */ }
+    } else {
+      csvInput.click();
     }
   });
 

@@ -1,6 +1,6 @@
-// Template de injeção de env. O entrypoint do nginx roda envsubst sobre este
-// arquivo e gera /tmp/env.js (servido como /env.js). NÃO commitar app/env.js.
-// config.js lê window.__ENV__.
+// Referência do formato do /env.js gerado em runtime pelo nginx
+// (nginx/generate-env.sh — heredoc com escaping; NÃO usa mais envsubst).
+// NÃO commitar app/env.js. config.js lê window.__ENV__.
 window.__ENV__ = {
   SUPABASE_URL: "${SUPABASE_URL}",
   SUPABASE_ANON_KEY: "${SUPABASE_ANON_KEY}",
