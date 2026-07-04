@@ -2,7 +2,9 @@
 // Nenhum outro módulo instancia o client. Schema fixo em `monjaro`.
 // Ver framework.md (§5) e architecture.md.
 
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+// Versão pinada: sem pin o CDN entrega "latest" — quebra silenciosa e
+// supply chain (WR-04 do review). Atualizar conscientemente quando quiser.
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.0/+esm';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
 
 export const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
