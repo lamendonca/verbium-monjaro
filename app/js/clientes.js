@@ -51,6 +51,16 @@ export function estaPerdido(cliente, ultimoPedidoISO) {
 export const marcarPerdido = (id) => update('clientes', id, { perdido_em: hojeISO() });
 export const retomarCliente = (id) => update('clientes', id, { perdido_em: null });
 
+// Cancela follow-ups agendados e ainda não enviados do cliente. Vive aqui
+// (e não em inicio.js) pra todo caminho que marca perdido poder cancelar
+// sem criar import circular — inicio.js já importa deste módulo.
+export async function cancelarFollowupsPendentes(clienteId) {
+  const { error } = await db.from('followups')
+    .update({ is_active: false })
+    .eq('cliente_id', clienteId).eq('is_active', true).is('enviado_em', null);
+  if (error) throw new Error(error.message);
+}
+
 // Retomada manual de negociação (arrasto pra "Não iniciada"). Um pedido
 // posterior encerra a negociação — derivado, sem write extra.
 export const marcarNegociacao = (id) =>
@@ -194,6 +204,8 @@ export async function abrirDetalheCliente(cliente, { onEditar, onChanged } = {})
           class: 'btn btn-outline btn-sm',
           onclick: async () => {
             if (!await confirmar(`${cliente.nome} não quer agora? Ele sai dos alertas e fica ${PERDIDO_DIAS_VISIVEL} dias no Perdido.`, { rotulo: 'Perdido' })) return;
+            // sem isso, o pg_cron enviaria mensagem automática a quem recusou
+            await cancelarFollowupsPendentes(cliente.id);
             await marcarPerdido(cliente.id);
             toast('Marcado como perdido.');
             aposMudanca();

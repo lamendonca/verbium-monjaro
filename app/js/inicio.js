@@ -6,6 +6,7 @@
 import {
   listarClientes, recompraPorCliente, botaoWhatsApp, abrirDetalheCliente,
   estaPerdido, marcarPerdido, retomarCliente, marcarNegociacao, PERDIDO_DIAS_VISIVEL,
+  cancelarFollowupsPendentes,
 } from './clientes.js';
 import { listarPedidos, novoPedidoParaCliente, removerPedido } from './pedidos.js';
 import { estoqueLivre } from './compras.js';
@@ -25,15 +26,8 @@ async function followupsPendentes() {
   return data;
 }
 
-async function cancelarFollowup(clienteId) {
-  const { error } = await db.from('followups')
-    .update({ is_active: false })
-    .eq('cliente_id', clienteId).eq('is_active', true).is('enviado_em', null);
-  if (error) throw new Error(error.message);
-}
-
 async function agendarFollowup(clienteId, data, mensagem) {
-  await cancelarFollowup(clienteId); // um pendente por cliente
+  await cancelarFollowupsPendentes(clienteId); // um pendente por cliente
   return insert('followups', { cliente_id: clienteId, data, mensagem });
 }
 
@@ -127,7 +121,7 @@ async function moverCard(item, de, para, onChanged) {
     }
     if (para === 'perdido') {
       if (!await confirmar(`Marcar ${c.nome} como perdido? Ele sai dos alertas por enquanto.`, { rotulo: 'Perdido' })) return;
-      await cancelarFollowup(c.id);
+      await cancelarFollowupsPendentes(c.id);
       await marcarPerdido(c.id);
       toast('Marcado como perdido.');
       return onChanged();
@@ -143,7 +137,7 @@ async function moverCard(item, de, para, onChanged) {
       } else {
         await marcarNegociacao(c.id);
       }
-      if (de === 'followup') await cancelarFollowup(c.id);
+      if (de === 'followup') await cancelarFollowupsPendentes(c.id);
       toast('Em negociação.');
       return onChanged();
     }
@@ -154,7 +148,7 @@ async function moverCard(item, de, para, onChanged) {
         pagamento: para === 'pendente' ? 'pendente' : 'pago',
         entrega: para === 'entregue' ? 'entregue' : 'aguardando',
         onSave: async () => {
-          if (de === 'followup') await cancelarFollowup(c.id);
+          if (de === 'followup') await cancelarFollowupsPendentes(c.id);
           onChanged();
         },
       });
@@ -170,7 +164,7 @@ async function moverCard(item, de, para, onChanged) {
       patch.entrega = 'entregue';
     }
     await update('pedidos', p.id, patch);
-    if (de === 'followup') await cancelarFollowup(c.id);
+    if (de === 'followup') await cancelarFollowupsPendentes(c.id);
     toast('Movido.');
     onChanged();
   } catch (err) {
