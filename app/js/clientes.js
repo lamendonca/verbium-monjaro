@@ -403,6 +403,63 @@ export function initClientes() {
     }
   });
 
+  // ---- Importar contatos ----
+  // Celular (Chrome/Android): Contact Picker nativo. Sem suporte: CSV
+  // com colunas nome,contato. Duplicados (mesmos dígitos) são pulados.
+  async function importarLista(itens) {
+    const existentes = new Set(
+      (await listarClientes()).map((c) => c.contato.replace(/\D/g, '')),
+    );
+    const vistos = new Set();
+    const novos = itens
+      .map((i) => ({ nome: (i.nome || '').trim(), contato: normalizarContato(i.contato || '') }))
+      .filter((i) => {
+        const digitos = i.contato.replace(/\D/g, '');
+        if (!i.nome || digitos.length < 10 || existentes.has(digitos) || vistos.has(digitos)) return false;
+        vistos.add(digitos);
+        return true;
+      });
+    if (!novos.length) return toast('Nenhum contato novo pra importar.');
+    if (!await confirmar(`Importar ${novos.length} contato(s) como clientes?`, { rotulo: 'Importar', perigo: false })) return;
+    let ok = 0;
+    for (const n of novos) {
+      try {
+        await insert('clientes', { nome: n.nome, contato: n.contato });
+        ok += 1;
+      } catch { /* segue os demais; o total informa o resultado */ }
+    }
+    toast(`${ok} de ${novos.length} contato(s) importado(s).`);
+    refresh();
+  }
+
+  const csvInput = document.getElementById('csv-clientes');
+  csvInput.addEventListener('change', () => {
+    const arquivo = csvInput.files?.[0];
+    csvInput.value = '';
+    if (!arquivo) return;
+    const leitor = new FileReader();
+    leitor.onload = () => {
+      const linhas = String(leitor.result).split(/\r?\n/).filter((l) => l.trim());
+      const itens = linhas
+        .map((l) => l.split(/[;,]/))
+        .filter((cols) => cols.length >= 2 && !/^nome$/i.test(cols[0].trim()))
+        .map((cols) => ({ nome: cols[0], contato: cols[1] }));
+      importarLista(itens);
+    };
+    leitor.readAsText(arquivo);
+  });
+
+  onClickOnce(document.getElementById('btn-importar-clientes'), async () => {
+    if (navigator.contacts?.select) {
+      try {
+        const contatos = await navigator.contacts.select(['name', 'tel'], { multiple: true });
+        await importarLista(contatos.map((ct) => ({ nome: ct.name?.[0], contato: ct.tel?.[0] })));
+      } catch { /* seleção cancelada */ }
+    } else {
+      csvInput.click();
+    }
+  });
+
   onClickOnce(btnRemover, async () => {
     if (!await confirmar(`Remover ${campos.nome.value}? Ele sai das listas, mas o histórico continua.`, { rotulo: 'Remover' })) return;
     try {
