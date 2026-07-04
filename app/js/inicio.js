@@ -172,8 +172,49 @@ async function moverCard(item, de, para, onChanged) {
   }
 }
 
-// Mouse: arrasta direto (movimento > 5px). Touch: long-press curto (200ms)
-// pra não brigar com a rolagem do kanban.
+// ---- Modo mover (touch) ----
+// Arrastar segurando brigava com a rolagem no iOS (pointercancel, callout,
+// sem como rolar com o card preso). Padrão novo: segurar PEGA o card, a
+// rolagem continua 100% livre, e tocar na fase de destino solta. Banner
+// fixo mostra o que está sendo movido, com Cancelar.
+let modoMover = null; // { item, fase, onChanged }
+let bannerMover = null;
+let ignorarCliquePosPegar = false;
+
+function sairModoMover() {
+  modoMover = null;
+  bannerMover?.remove();
+  bannerMover = null;
+  document.querySelectorAll('.kanban-card.movendo').forEach((c) => c.classList.remove('movendo'));
+  document.getElementById('funil')?.classList.remove('escolhendo');
+}
+
+function entrarModoMover(card, item, fase, onChanged) {
+  sairModoMover();
+  modoMover = { item, fase, onChanged };
+  card.classList.add('movendo');
+  document.getElementById('funil')?.classList.add('escolhendo');
+  navigator.vibrate?.(15);
+  // o clique disparado ao soltar o dedo do long-press não é uma escolha
+  ignorarCliquePosPegar = true;
+  document.addEventListener('pointerup', () => {
+    setTimeout(() => { ignorarCliquePosPegar = false; }, 350);
+  }, { once: true });
+  bannerMover = el('div', { class: 'mover-banner' },
+    el('div', {}, `Movendo ${item.c.nome} — toque na fase de destino`),
+    el('button', { class: 'btn btn-outline btn-sm', onclick: sairModoMover }, 'Cancelar'));
+  document.body.append(bannerMover);
+}
+
+// Chamado pela coluna (fase de captura) quando há um card "pego".
+function concluirModoMover(faseDestino) {
+  const { item, fase, onChanged } = modoMover;
+  sairModoMover();
+  if (faseDestino !== fase) moverCard(item, fase, faseDestino, onChanged);
+}
+
+// Mouse: arrasto direto com ghost (desktop). Touch: long-press entra no
+// modo mover acima — nenhum preventDefault de rolagem envolvido.
 function tornarArrastavel(card, item, fase, onChanged) {
   let timer = null;
   let ghost = null;
@@ -204,9 +245,7 @@ function tornarArrastavel(card, item, fase, onChanged) {
     if (col && alvo !== fase) col.classList.add('drop-alvo');
   };
 
-  // No mobile só ~1,5 coluna aparece: sem isto não dá pra alcançar as outras
-  // fases arrastando. Card parado na borda rola o kanban sozinho (no desktop
-  // em grade, scrollLeft é no-op inofensivo).
+  // Janela estreita com mouse: kanban ainda rola — borda rola sozinha.
   const autoScroll = () => {
     if (!arrastando) return;
     const kanban = card.closest('.kanban');
@@ -215,23 +254,17 @@ function tornarArrastavel(card, item, fase, onChanged) {
       const zona = 56;
       if (px > r.right - zona) kanban.scrollLeft += 14;
       else if (px < r.left + zona) kanban.scrollLeft -= 14;
-      atualizarAlvo(px, py); // o scroll muda a coluna sob o dedo
+      atualizarAlvo(px, py);
     }
     raf = requestAnimationFrame(autoScroll);
   };
 
   card.addEventListener('contextmenu', (e) => {
-    if (arrastando || timer) e.preventDefault();
+    if (arrastando || timer || modoMover) e.preventDefault();
   });
-  // Non-passive: precisa poder cancelar a rolagem enquanto arrasta (touch).
-  card.addEventListener('touchmove', (e) => {
-    if (arrastando) e.preventDefault();
-  }, { passive: false });
 
   const levantar = (pointerId) => {
     arrastando = true;
-    // iOS Safari pode recusar captura fora do handler do evento — o arrasto
-    // funciona mesmo sem ela (touchmove segue mirando o card de origem)
     try { card.setPointerCapture(pointerId); } catch { /* segue sem captura */ }
     const r = card.getBoundingClientRect();
     ghost = card.cloneNode(true);
@@ -242,7 +275,6 @@ function tornarArrastavel(card, item, fase, onChanged) {
     });
     document.body.append(ghost);
     card.style.opacity = .35;
-    navigator.vibrate?.(15);
     raf = requestAnimationFrame(autoScroll);
   };
 
@@ -251,7 +283,8 @@ function tornarArrastavel(card, item, fase, onChanged) {
     sx = e.clientX;
     sy = e.clientY;
     if (e.pointerType === 'touch') {
-      timer = setTimeout(() => levantar(e.pointerId), 200);
+      if (modoMover) return; // já tem card pego — o toque é escolha de destino
+      timer = setTimeout(() => entrarModoMover(card, item, fase, onChanged), 250);
     } else {
       armado = e.pointerId; // mouse: levanta no primeiro movimento real
     }
@@ -266,7 +299,7 @@ function tornarArrastavel(card, item, fase, onChanged) {
         levantar(armado);
         armado = null;
       } else if (timer && distancia > 8) {
-        // touch: moveu antes do long-press = rolagem, não arrasto
+        // touch: moveu antes do long-press = rolagem, não pegar
         clearTimeout(timer);
         timer = null;
       }
@@ -290,8 +323,6 @@ function tornarArrastavel(card, item, fase, onChanged) {
     alvo = null;
   };
   card.addEventListener('pointerup', () => soltar(true));
-  // cancel (iOS converte gesto em rolagem, ligação, etc.) = abortar,
-  // nunca aplicar o movimento pela última coluna tocada
   card.addEventListener('pointercancel', () => soltar(false));
 }
 
@@ -325,11 +356,21 @@ function cardFunil(item, fase, onChanged) {
 }
 
 function colunaFunil(titulo, fase, cards, onChanged) {
-  return el('div', { class: 'kanban-col', 'data-fase': fase },
+  const col = el('div', { class: 'kanban-col', 'data-fase': fase },
     el('div', { class: 'col-title' }, titulo, el('span', { class: 'count' }, cards.length)),
     cards.length
       ? cards.map((card) => cardFunil(card, fase, onChanged))
       : el('div', { class: 'vazio' }, '—'));
+  // Com card pego, QUALQUER toque na coluna (título, card, vazio) é escolha
+  // de destino — captura impede o clique de abrir detalhe/ações.
+  col.addEventListener('click', (e) => {
+    if (!modoMover) return;
+    e.stopPropagation();
+    e.preventDefault();
+    if (ignorarCliquePosPegar) return;
+    concluirModoMover(fase);
+  }, true);
+  return col;
 }
 
 // Fase atual e item de cada cliente no funil — atualizado a cada refresh;
@@ -358,6 +399,7 @@ export function initInicio() {
   });
 
   async function refresh() {
+    sairModoMover(); // re-render invalida o card pego
     loadingState(listaAlertas);
     loadingState(funilEl);
     try {
