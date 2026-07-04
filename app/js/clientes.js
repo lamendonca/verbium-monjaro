@@ -173,6 +173,22 @@ function itemHistorico(p) {
 // Registrado por initClientes — permite Editar a partir de qualquer tela.
 let abrirModalClienteRef = null;
 
+// Registrado por initInicio — mover de fase no funil a partir do detalhe,
+// sem import circular (inicio.js já importa este módulo).
+let moverFaseRef = null;
+export function registrarMoverFase(fn) {
+  moverFaseRef = fn;
+}
+
+const FASES_FUNIL = [
+  ['nao_iniciada', 'Não iniciada'],
+  ['followup', 'Follow-up'],
+  ['pendente', 'Pendente pagamento'],
+  ['pago', 'Pago'],
+  ['entregue', 'Entregue'],
+  ['perdido', 'Perdido'],
+];
+
 export async function abrirDetalheCliente(cliente, { onEditar, onChanged } = {}) {
   const corpo = document.getElementById('detalhe-corpo');
   openModal('modal-detalhe');
@@ -252,6 +268,19 @@ export async function abrirDetalheCliente(cliente, { onEditar, onChanged } = {})
             : null;
         })(),
         btnPerdido),
+      moverFaseRef
+        ? el('div', { style: 'margin-bottom:16px' },
+            el('div', { class: 'form-label' }, 'Mover no funil'),
+            el('div', { class: 'tabs', style: 'margin-bottom:0' },
+              FASES_FUNIL.map(([faseKey, rotulo]) => el('button', {
+                class: 'tab',
+                onclick: async () => {
+                  closeModal('modal-detalhe');
+                  await moverFaseRef(cliente, faseKey);
+                  onChanged?.();
+                },
+              }, rotulo))))
+        : null,
       el('div', { class: 'section-title', style: 'margin-top:0' }, 'Histórico de pedidos'),
       pedidos.length
         ? el('div', {}, pedidos.map(itemHistorico))
