@@ -360,8 +360,23 @@ select.form-input { appearance: none; }
 }
 .kanban-card .title { font-size: 14px; font-weight: 600; }
 .kanban-card .sub { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+.kanban-card .badges { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
 .kanban-card .acao { margin-top: 8px; }
 .kanban-col .vazio { font-size: 12px; color: var(--text-muted); text-align: center; padding: 12px 0; }
+
+/* Subseções por data na coluna Follow-up (Hoje / Amanhã / dd/mm) */
+.kanban-col .col-subheader {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  color: var(--text-muted);
+  margin: 8px 0 4px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+}
+.kanban-col .col-title + .col-subheader { margin-top: 0; padding-top: 0; border-top: none; }
+.kanban-col .col-subheader.atrasado { color: var(--danger); }
 
 /* Modo mover (touch): card pego + colunas como alvos de toque */
 .kanban-card.movendo {

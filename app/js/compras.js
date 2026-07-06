@@ -39,6 +39,7 @@ const badgePagamento = {
   pago: ['badge-green', 'Pago'],
   parcial: ['badge-yellow', 'Parcial'],
   pendente: ['badge-red', 'Pendente'],
+  sem_pagamento: ['badge-gray', 'Sem pagamento'], // estoque em mãos — não é dívida
 };
 
 function itemLote(lote, onEdit) {
@@ -48,9 +49,14 @@ function itemLote(lote, onEdit) {
     el('div', { class: 'info' },
       el('div', { class: 'title' }, lote.referencia || `Lote de ${fmtData(lote.data)}`),
       el('div', { class: 'sub' },
-        `${fmtData(lote.data)} · ${lote.qtd_disp}/${lote.qtd} disponível · ${fmtMoney(lote.custo_total)} (${fmtMoney(lote.custo_unit)}/un)`),
+        Number(lote.custo_total) > 0
+          ? `${fmtData(lote.data)} · ${lote.qtd_disp}/${lote.qtd} disponível · ${fmtMoney(lote.custo_total)} (${fmtMoney(lote.custo_unit)}/un)`
+          : `${fmtData(lote.data)} · ${lote.qtd_disp}/${lote.qtd} disponível`),
       el('div', { class: 'badges' },
         el('span', { class: `badge ${cls}` }, label),
+        Number(lote.custo_total) > 0
+          ? null
+          : el('span', { class: 'badge badge-gray' }, 'sem custo — fora do lucro'),
         lote.qtd < LOTE_MINIMO ? el('span', { class: 'badge badge-yellow' }, '⚠️ abaixo do mínimo') : null,
         lote.chegada ? el('span', { class: 'badge badge-gray' }, `chegada ${fmtData(lote.chegada)}`) : null),
       el('div', { class: 'progress' },

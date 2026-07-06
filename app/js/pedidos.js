@@ -102,6 +102,7 @@ const badgePagamento = {
   pago: ['badge-green', 'Pago'],
   parcial: ['badge-yellow', 'Parcial'],
   pendente: ['badge-red', 'Pendente'],
+  bonificado: ['badge-purple', 'Bonificado'],
 };
 const badgeEntrega = {
   entregue: ['badge-green', 'Entregue'],
@@ -111,7 +112,8 @@ const badgeEntrega = {
 
 const FILTROS = {
   todos: () => true,
-  pendentes: (p) => p.pagamento !== 'pago',
+  // bonificado não é cobrança pendente — brinde não tem o que receber
+  pendentes: (p) => p.pagamento === 'pendente' || p.pagamento === 'parcial',
   entregar: (p) => p.entrega !== 'entregue',
 };
 
@@ -163,6 +165,13 @@ export function initPedidos() {
     ]);
   }
 
+  // Bonificado é brinde: valor travado em 0 pra não inflar receita/a receber.
+  function aplicarBonificado() {
+    const bonificado = campos.pagamento.value === 'bonificado';
+    if (bonificado) campos.valor.value = '0';
+    campos.valor.disabled = bonificado;
+  }
+
   async function abrirModal(pedido) {
     form.reset();
     emEdicao = pedido || null;
@@ -176,6 +185,7 @@ export function initPedidos() {
     campos.pagamento.value = pedido?.pagamento || 'pendente';
     campos.entrega.value = pedido?.entrega || 'aguardando';
     campos.dose.value = pedido?.dose || '';
+    aplicarBonificado();
     document.getElementById('modal-pedido-titulo').textContent = pedido ? 'Editar pedido' : 'Novo pedido';
     btnRemover.classList.toggle('hidden', !pedido);
     openModal('modal-pedido');
@@ -207,6 +217,7 @@ export function initPedidos() {
   });
 
   document.getElementById('btn-novo-pedido').addEventListener('click', () => abrirModal(null));
+  campos.pagamento.addEventListener('change', aplicarBonificado);
   abrirModalRef = abrirModal;
 
   submitOnce(form, async () => {
@@ -217,7 +228,7 @@ export function initPedidos() {
         compra_id: campos.lote.value || null,
         data: campos.data.value,
         qtd: Number(campos.qtd.value) || 1,
-        valor: Number(campos.valor.value),
+        valor: campos.pagamento.value === 'bonificado' ? 0 : Number(campos.valor.value),
         pagamento: campos.pagamento.value,
         entrega: campos.entrega.value,
         dose: campos.dose.value.trim() || null,

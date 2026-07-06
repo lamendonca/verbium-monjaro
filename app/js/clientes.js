@@ -8,7 +8,9 @@ import {
   openModal, closeModal, toast, submitOnce, onClickOnce, confirmar,
 } from './ui.js';
 
-export const listarClientes = () => list('clientes', { order: 'nome' });
+// `indicador` resolve o nome de quem indicou (FK auto-referente da 014).
+export const listarClientes = () =>
+  list('clientes', { order: 'nome', select: '*, indicador:indicado_por(nome)' });
 
 export async function salvarCliente(cliente) {
   if (cliente.id) {
@@ -99,6 +101,11 @@ const rotuloPagamento = { pix: 'Pix', cartao: 'Cartão' };
 const badgeFormaPagamento = (forma) =>
   forma ? el('span', { class: 'badge badge-gray' }, rotuloPagamento[forma] || forma) : null;
 
+const badgeIndicacao = (cliente) =>
+  cliente.indicado_por
+    ? el('span', { class: 'badge badge-purple' }, `Indicação de ${cliente.indicador?.nome || '—'}`)
+    : null;
+
 export function botaoWhatsApp(nome, contato) {
   const link = whatsappLink(nome, contato);
   return el('button', {
@@ -140,6 +147,8 @@ function itemCliente(cliente, recompra, onEdit, onDetalhe, onTag) {
           { tipo: 'origem', valor: cliente.origem, rotulo: rotuloOrigem[cliente.origem] || cliente.origem }, onTag),
         tagFiltravel(badgeFormaPagamento(cliente.forma_pagamento),
           { tipo: 'pagamento', valor: cliente.forma_pagamento, rotulo: rotuloPagamento[cliente.forma_pagamento] || cliente.forma_pagamento }, onTag),
+        tagFiltravel(badgeIndicacao(cliente),
+          { tipo: 'indicacao', valor: cliente.indicado_por, rotulo: `Indicação de ${cliente.indicador?.nome || '—'}` }, onTag),
         perdido
           ? tagFiltravel(el('span', { class: 'badge badge-red' }, 'Perdido'),
               { tipo: 'perdido', rotulo: 'Perdido' }, onTag)
@@ -152,6 +161,7 @@ function itemCliente(cliente, recompra, onEdit, onDetalhe, onTag) {
 // ---- Detalhe do cliente (histórico completo) ----
 const badgePag = {
   pago: ['badge-green', 'Pago'], parcial: ['badge-yellow', 'Parcial'], pendente: ['badge-red', 'Pendente'],
+  bonificado: ['badge-purple', 'Bonificado'],
 };
 const badgeEnt = {
   entregue: ['badge-green', 'Entregue'], separado: ['badge-yellow', 'Separado'], aguardando: ['badge-gray', 'Aguardando'],
@@ -194,12 +204,15 @@ export async function abrirDetalheCliente(cliente, { onEditar, onChanged } = {})
   openModal('modal-detalhe');
   loadingState(corpo);
   try {
-    const [{ data: pedidos, error }, recompra] = await Promise.all([
+    const [{ data: pedidos, error }, recompra, { data: indicados }] = await Promise.all([
       db.from('pedidos')
         .select('*, lote:compra_id(referencia, data)')
         .eq('cliente_id', cliente.id).eq('is_active', true)
         .order('data', { ascending: false }),
       recompraPorCliente(),
+      // cadeia de indicação (nível direto): quem este cliente trouxe
+      db.from('clientes')
+        .select('nome').eq('indicado_por', cliente.id).eq('is_active', true).order('nome'),
     ]);
     if (error) throw new Error(error.message);
     const r = recompra.find((x) => x.cliente_id === cliente.id);
@@ -236,7 +249,14 @@ export async function abrirDetalheCliente(cliente, { onEditar, onChanged } = {})
         el('span', { class: `badge ${cls}` }, label),
         badgeOrigem(cliente.origem),
         badgeFormaPagamento(cliente.forma_pagamento),
+        badgeIndicacao(cliente),
         perdido ? el('span', { class: 'badge badge-red' }, `Perdido em ${fmtData(cliente.perdido_em)}`) : null),
+      indicados?.length
+        ? el('div', {
+            class: 'sub',
+            style: 'color:var(--text-muted); font-size:13px; margin:-8px 0 14px',
+          }, `Indicou: ${indicados.map((i) => i.nome).join(', ')}`)
+        : null,
       typeof cliente.anotacao === 'string' && cliente.anotacao.trim() && cliente.anotacao !== 'null'
         ? el('div', {
             class: 'card',
@@ -303,6 +323,7 @@ export function initClientes() {
     dose: document.getElementById('cliente-dose'),
     origem: document.getElementById('cliente-origem'),
     formaPagamento: document.getElementById('cliente-forma-pagamento'),
+    indicadoPor: document.getElementById('cliente-indicado-por'),
     anotacao: document.getElementById('cliente-anotacao'),
     valorNegociacao: document.getElementById('cliente-valor-negociacao'),
   };
@@ -311,8 +332,21 @@ export function initClientes() {
   let cache = { clientes: [], recompra: new Map() };
   let filtroTag = null; // { tipo: status|origem|perdido, valor, rotulo }
 
-  function abrirModal(cliente) {
+  // Opções do "Indicado por": todo cliente ativo menos o próprio (ninguém
+  // se auto-indica). Fora da aba Clientes o cache pode estar vazio — busca.
+  async function preencherIndicadoPor(cliente) {
+    const clientes = cache.clientes.length ? cache.clientes : await listarClientes();
+    renderInto(campos.indicadoPor, [
+      el('option', { value: '' }, '—'),
+      ...clientes
+        .filter((c) => c.id !== cliente?.id)
+        .map((c) => el('option', { value: c.id }, c.nome)),
+    ]);
+  }
+
+  async function abrirModal(cliente) {
     form.reset();
+    await preencherIndicadoPor(cliente);
     campos.id.value = cliente?.id || '';
     campos.nome.value = cliente?.nome || '';
     campos.contato.value = cliente?.contato || '';
@@ -320,6 +354,7 @@ export function initClientes() {
     campos.dose.value = cliente?.dose || '';
     campos.origem.value = cliente?.origem || '';
     campos.formaPagamento.value = cliente?.forma_pagamento || '';
+    campos.indicadoPor.value = cliente?.indicado_por || '';
     campos.anotacao.value = cliente?.anotacao || '';
     campos.valorNegociacao.value = cliente?.valor_negociacao ?? '';
     document.getElementById('modal-cliente-titulo').textContent = cliente ? 'Editar cliente' : 'Novo cliente';
@@ -332,6 +367,7 @@ export function initClientes() {
     const r = cache.recompra.get(c.id);
     if (filtroTag.tipo === 'origem') return c.origem === filtroTag.valor;
     if (filtroTag.tipo === 'pagamento') return c.forma_pagamento === filtroTag.valor;
+    if (filtroTag.tipo === 'indicacao') return c.indicado_por === filtroTag.valor;
     if (filtroTag.tipo === 'perdido') return estaPerdido(c, r?.ultimo_pedido);
     return (r?.status || 'sem_pedido') === filtroTag.valor;
   }
@@ -392,6 +428,7 @@ export function initClientes() {
         dose: campos.dose.value.trim() || null,
         origem: campos.origem.value || null,
         forma_pagamento: campos.formaPagamento.value || null,
+        indicado_por: campos.indicadoPor.value || null,
         anotacao: campos.anotacao.value.trim() || null,
         valor_negociacao: campos.valorNegociacao.value ? Number(campos.valorNegociacao.value) : null,
       });
