@@ -51,6 +51,15 @@ export async function salvarPedido(pedido, anterior) {
   }
   const { id, ...resto } = pedido;
   const salvo = id ? await update('pedidos', id, resto) : await insert('pedidos', resto);
+  if (!id) {
+    // Pedido novo encerra negociação e perdido — a derivação por data falha
+    // quando tudo acontece no MESMO dia (negociacao_em >= data mandava o
+    // card concluído de volta pra "Não iniciada"). Best-effort: falhar aqui
+    // não pode desfazer a venda.
+    try {
+      await update('clientes', pedido.cliente_id, { negociacao_em: null, perdido_em: null });
+    } catch { /* o funil se corrige no próximo pedido/retomada */ }
+  }
   const aplicados = []; // ajustes já efetivados, pra desfazer se um falhar
   try {
     // Devolve ao lote antigo e debita do novo (mesmo lote → ajuste líquido).

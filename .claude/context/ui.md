@@ -41,7 +41,7 @@ Objetivo: o operador abre o app e vê o **funil de atendimento** e o **resumo do
   - Estoque livre (Σ `compras.qtd_disp` dos lotes ativos)
   - A receber (Σ `valor` de pedidos `pendente`/`parcial`)
   - Lucro consolidado (Σ lucro por lote) — ver `business-rules.md`
-- **Funil de vendas (kanban)**: colunas com rolagem horizontal — Não iniciada · Follow-up · Pendente pagamento · Pago · Entregue medicação · Perdido. Fases derivadas do último pedido + recompra (`business-rules.md` §6); cards de retomada trazem botão WhatsApp; badge "a cada N dias" quando há frequência.
+- **Funil de vendas (kanban)**: colunas com rolagem horizontal — Não iniciada · Follow-up · Pendente pagamento · Pago · Entregar medicação · Concluído · Perdido. Fases derivadas do último pedido + recompra (`business-rules.md` §6); cards de retomada trazem botão WhatsApp; badge "a cada N dias" quando há frequência.
 - **Coluna Follow-up**: subcabeçalhos por data (Hoje / Amanhã / Atrasado · dd/mm / dd/mm) + badge ×N de retomadas do ciclo.
 - A antiga lista "Acionar nos próximos 10 dias" foi removida — a retomada vive no funil.
 

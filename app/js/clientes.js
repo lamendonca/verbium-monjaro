@@ -195,7 +195,8 @@ const FASES_FUNIL = [
   ['followup', 'Follow-up'],
   ['pendente', 'Pendente pagamento'],
   ['pago', 'Pago'],
-  ['entregue', 'Entregue'],
+  ['entregar', 'Entregar medicação'],
+  ['entregue', 'Concluído'],
   ['perdido', 'Perdido'],
 ];
 

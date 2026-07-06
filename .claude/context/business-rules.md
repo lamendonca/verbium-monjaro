@@ -136,10 +136,13 @@ Fases **derivadas** dos dados — nenhum estado extra persistido. Por cliente at
 | **Follow-up pendente** (`followups` com `enviado_em IS NULL`) | **Follow-up** (mensagem automática agendada) |
 | Sem nenhum pedido | **Não iniciada** ("novo — em negociação") |
 | Último pedido não quitado (`pagamento IN (pendente, parcial)`) | **Pendente pagamento** |
-| Último pedido quitado (`pago` ou `bonificado`) e `entrega ≠ entregue` | **Pago** |
+| Último pedido quitado (`pago` ou `bonificado`) e `entrega = aguardando` | **Pago** |
+| Último pedido quitado e `entrega = separado` | **Entregar medicação** (fila de entrega) |
 | `negociacao_em` ≥ data do último pedido (retomada manual) | **Não iniciada** ("em negociação") |
 | Ciclo concluído e recompra `atrasado`/`alerta` | **Não iniciada** (retomada automática, com botão WhatsApp) |
-| Ciclo concluído, sem alerta | **Entregue medicação** (descansa até o próximo ciclo) |
+| Ciclo concluído, sem alerta | **Concluído** (descansa até o próximo ciclo) |
+
+> `negociacao_em` é **limpo** ao criar pedido novo (junto com `perdido_em`) e ao mover um card pra fase de pedido — sem isso, retomada e venda no MESMO dia (`negociacao_em >= data`) devolveriam o card concluído pra "Não iniciada".
 
 **Follow-up** (tabela `followups`, migration `007`): mover um card pra cá abre modal de **data + mensagem**. Um job `pg_cron` (`monjaro_followups`, diário às 12:00 UTC ≈ 9h Brasília) chama `monjaro.enviar_followups()`, que envia as mensagens vencidas via **Evolution API** (`pg_net` → `POST /message/sendText/{instance}`) e marca `enviado_em`. Credenciais em `monjaro.config` (`evolution_url`, `evolution_instance`, `evolution_apikey`) — RLS deny, anon não lê. Um followup pendente por cliente; sair da coluna cancela (`is_active=false`); após enviado, o card volta à derivação normal.
 
@@ -161,9 +164,10 @@ Fases **derivadas** dos dados — nenhum estado extra persistido. Por cliente at
 | Perdido → Não iniciada | `retomarCliente` |
 | Entregue → Não iniciada | `marcarNegociacao` (retomada manual) |
 | Pendente/Pago → Não iniciada | **remove o pedido em aberto** (confirmação; estoque volta) + `marcarNegociacao` |
-| Pendente → Pago | último pedido `pagamento = pago` |
-| Pago/Pendente → Entregue | `pagamento = pago` + `entrega = entregue` (pedido **bonificado** mantém `bonificado` — só entrega) |
-| Pago → Pendente · Entregue → Pago | correções (reverte pagamento / entrega → `separado`) |
+| → Pago | `pagamento = pago` + `entrega = aguardando` |
+| → Entregar medicação | `pagamento = pago` + `entrega = separado` (bonificado mantém `bonificado`) |
+| → Concluído | `pagamento = pago` + `entrega = entregue` (bonificado mantém `bonificado`) |
+| → Pendente | correção: `pagamento = pendente` |
 | Não iniciada/Perdido → fase de pedido | abre **novo pedido** pré-preenchido (novo ciclo); salvar conclui o movimento |
 
 **Coluna Follow-up**: cards agrupados por data com subcabeçalhos ("Hoje", "Amanhã", "Atrasado · dd/mm", dd/mm) pra enxergar a fila de mensagens. Badge **×N** no card = quantas vezes o cliente voltou ao Follow-up no ciclo atual (linhas de `followups` criadas após o último pedido; N ≥ 2). Todos os cards do funil mostram badge "a cada N dias" quando há frequência (efetiva da view).

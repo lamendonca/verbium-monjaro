@@ -317,7 +317,7 @@ select.form-input { appearance: none; }
 @media (min-width: 900px) {
   .kanban {
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     overflow-x: visible;
   }
   .kanban-col { min-width: 0; max-width: none; }

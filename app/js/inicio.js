@@ -72,7 +72,7 @@ function contarRetomadas(followups, ultimoPedidoMap) {
 const quitado = (p) => p.pagamento === 'pago' || p.pagamento === 'bonificado';
 
 function montarFunil(clientes, recompraMap, ultimoPedidoMap, followupMap) {
-  const fases = { nao_iniciada: [], followup: [], pendente: [], pago: [], entregue: [], perdido: [] };
+  const fases = { nao_iniciada: [], followup: [], pendente: [], pago: [], entregar: [], entregue: [], perdido: [] };
   for (const c of clientes) {
     const r = recompraMap.get(c.id);
     const p = ultimoPedidoMap.get(c.id);
@@ -92,13 +92,22 @@ function montarFunil(clientes, recompraMap, ultimoPedidoMap, followupMap) {
       fases.nao_iniciada.push({ c, sub: `novo — em negociação${referencia}`, urgencia: 1 });
     } else if (!quitado(p)) {
       fases.pendente.push({ c, p, sub: `${fmtMoney(p.valor)} · pedido de ${fmtData(p.data)}` });
-    } else if (p.entrega !== 'entregue') {
+    } else if (p.entrega === 'aguardando') {
       fases.pago.push({
         c,
         p,
         sub: p.pagamento === 'bonificado'
-          ? 'bonificado, separar/entregar'
-          : `${fmtMoney(p.valor)} · pago, separar/entregar`,
+          ? 'bonificado — separar'
+          : `${fmtMoney(p.valor)} · pago — separar`,
+      });
+    } else if (p.entrega !== 'entregue') {
+      // separado: na fila de entrega
+      fases.entregar.push({
+        c,
+        p,
+        sub: p.pagamento === 'bonificado'
+          ? 'bonificado — entregar'
+          : `${fmtMoney(p.valor)} · entregar`,
       });
     } else if (c.negociacao_em && c.negociacao_em >= p.data) {
       // retomada manual (arrasto): em negociação até sair novo pedido
@@ -179,7 +188,7 @@ async function moverCard(item, de, para, onChanged) {
       if (de === 'perdido') await retomarCliente(c.id);
       return novoPedidoParaCliente(c.id, {
         pagamento: para === 'pendente' ? 'pendente' : 'pago',
-        entrega: para === 'entregue' ? 'entregue' : 'aguardando',
+        entrega: para === 'entregue' ? 'entregue' : para === 'entregar' ? 'separado' : 'aguardando',
         onSave: async () => {
           if (de === 'followup') await cancelarFollowupsPendentes(c.id);
           onChanged();
@@ -190,14 +199,22 @@ async function moverCard(item, de, para, onChanged) {
     if (para === 'pendente') patch.pagamento = 'pendente';
     if (para === 'pago') {
       patch.pagamento = 'pago';
-      if (p.entrega === 'entregue') patch.entrega = 'separado'; // voltando da entrega
+      if (p.entrega !== 'aguardando') patch.entrega = 'aguardando'; // voltando da fila/entrega
+    }
+    if (para === 'entregar') {
+      // entregar um brinde não o transforma em venda paga
+      if (p.pagamento !== 'bonificado') patch.pagamento = 'pago';
+      patch.entrega = 'separado';
     }
     if (para === 'entregue') {
-      // entregar um brinde não o transforma em venda paga
       if (p.pagamento !== 'bonificado') patch.pagamento = 'pago';
       patch.entrega = 'entregue';
     }
     await update('pedidos', p.id, patch);
+    // Mover pra fase de pedido encerra a negociação manual — sem isso, um
+    // pedido do MESMO dia da retomada (negociacao_em >= data) devolveria o
+    // card concluído pra "Não iniciada".
+    if (c.negociacao_em) await update('clientes', c.id, { negociacao_em: null });
     if (de === 'followup') await cancelarFollowupsPendentes(c.id);
     toast('Movido.');
     onChanged();
@@ -493,7 +510,8 @@ export function initInicio() {
         colunaFunil('Follow-up', 'followup', fases.followup, refresh),
         colunaFunil('Pendente pagamento', 'pendente', fases.pendente, refresh),
         colunaFunil('Pago', 'pago', fases.pago, refresh),
-        colunaFunil('Entregue medicação', 'entregue', fases.entregue, refresh),
+        colunaFunil('Entregar medicação', 'entregar', fases.entregar, refresh),
+        colunaFunil('Concluído', 'entregue', fases.entregue, refresh),
         colunaFunil('Perdido', 'perdido', fases.perdido, refresh),
       ]);
 
