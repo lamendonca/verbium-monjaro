@@ -179,7 +179,7 @@ body {
 .btn-primary:active { background: var(--primary-dark); transform: scale(.98); }
 .btn-outline { background: transparent; color: var(--text); border: 1px solid var(--border); }
 .btn-danger  { background: var(--danger); color: #fff; }
-.btn-sm { min-height: 34px; padding: 0 12px; font-size: 13px; border-radius: 10px; }
+.btn-sm { min-height: 44px; padding: 0 12px; font-size: 13px; border-radius: 10px; display: inline-flex; align-items: center; }
 .btn-whatsapp {
   background: color-mix(in srgb, var(--success) 14%, transparent);
   color: var(--success);
@@ -210,7 +210,13 @@ body {
   min-height: 44px;
 }
 .form-input:focus { outline: none; border-color: var(--primary); }
-select.form-input { appearance: none; }
+select.form-input {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23999' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .form-hint { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
 .form-hint.warn { color: var(--warning); }
@@ -233,6 +239,7 @@ select.form-input { appearance: none; }
   border-radius: 24px 24px 0 0;
   padding: 10px 16px calc(24px + env(safe-area-inset-bottom));
   animation: slideUp .3s ease;
+  overscroll-behavior: contain;
 }
 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 .modal-handle {
@@ -395,15 +402,28 @@ select.form-input { appearance: none; }
   bottom: calc(70px + env(safe-area-inset-bottom));
   z-index: 120;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
   background: var(--card);
   border: 1px solid var(--primary);
   border-radius: 14px;
   padding: 10px 12px;
   font-size: 13px;
   box-shadow: 0 8px 24px rgba(0,0,0,.35);
+}
+.mover-banner > .btn { align-self: flex-end; }
+.mover-banner-titulo { font-size: 13px; margin-bottom: 8px; }
+.mover-banner-fases {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.mover-banner-fases .tab {
+  font-size: 11px;
+  padding: 6px 10px;
+  min-height: 36px;
 }
 
 /* ============ Estados ============ */

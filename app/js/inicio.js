@@ -8,7 +8,7 @@
 import {
   listarClientes, recompraPorCliente, botaoWhatsApp, abrirDetalheCliente,
   estaPerdido, marcarPerdido, retomarCliente, marcarNegociacao, PERDIDO_DIAS_VISIVEL,
-  cancelarFollowupsPendentes, registrarMoverFase,
+  cancelarFollowupsPendentes, registrarMoverFase, registrarNovoPedido,
 } from './clientes.js';
 import { listarPedidos, novoPedidoParaCliente, removerPedido } from './pedidos.js';
 import { estoqueLivre } from './compras.js';
@@ -19,6 +19,17 @@ import {
   parseDateLocal, hojeLocal, diffDias, hojeISO, toast, openModal, closeModal,
   submitOnce, confirmar,
 } from './ui.js';
+
+// Rótulos abreviados para os chips do banner de mover (touch).
+const FASES_BANNER = [
+  ['nao_iniciada', 'Não inic.'],
+  ['followup', 'Follow-up'],
+  ['pendente', 'Pendente'],
+  ['pago', 'Pago'],
+  ['entregar', 'Entregar'],
+  ['entregue', 'Concluído'],
+  ['perdido', 'Perdido'],
+];
 
 // ---- Follow-up (mensagem automática via Evolution — business-rules.md §6) ----
 async function followupsPendentes() {
@@ -248,11 +259,18 @@ function entrarModoMover(card, item, fase, onChanged) {
   navigator.vibrate?.(15);
   // o clique disparado ao soltar o dedo do long-press não é uma escolha
   ignorarCliquePosPegar = true;
-  document.addEventListener('pointerup', () => {
-    setTimeout(() => { ignorarCliquePosPegar = false; }, 350);
-  }, { once: true });
+  const resetarFlag = () => setTimeout(() => { ignorarCliquePosPegar = false; }, 350);
+  document.addEventListener('pointerup', resetarFlag, { once: true });
+  document.addEventListener('pointercancel', resetarFlag, { once: true });
   bannerMover = el('div', { class: 'mover-banner' },
-    el('div', {}, `Movendo ${item.c.nome} — toque na fase de destino`),
+    el('div', { class: 'mover-banner-titulo' }, `Movendo ${item.c.nome}`),
+    el('div', { class: 'mover-banner-fases' },
+      FASES_BANNER.map(([key, rotulo]) =>
+        el('button', {
+          class: `tab${key === fase ? ' active' : ''}`,
+          disabled: key === fase,
+          onclick: () => concluirModoMover(key),
+        }, rotulo))),
     el('button', { class: 'btn btn-outline btn-sm', onclick: sairModoMover }, 'Cancelar'));
   document.body.append(bannerMover);
 }
@@ -528,6 +546,8 @@ export function initInicio() {
     const item = atual?.item || { c: cliente, p: ultimoPedidoAtual.get(cliente.id) };
     await moverCard(item, de, para, refresh);
   });
+
+  registrarNovoPedido(novoPedidoParaCliente);
 
   return refresh;
 }

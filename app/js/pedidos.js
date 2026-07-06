@@ -10,7 +10,7 @@ import { listarLotes } from './compras.js';
 import {
   el, renderInto, loadingState, emptyState, errorState,
   fmtMoney, fmtData, hojeISO, openModal, closeModal, toast,
-  submitOnce, onClickOnce, confirmar,
+  submitOnce, onClickOnce, confirmar, parseDecimal,
 } from './ui.js';
 
 const SELECT_PEDIDO = '*, cliente:cliente_id(nome), lote:compra_id(referencia, data)';
@@ -110,7 +110,7 @@ export async function novoPedidoParaCliente(clienteId, { pagamento, entrega, onS
 const badgePagamento = {
   pago: ['badge-green', 'Pago'],
   parcial: ['badge-yellow', 'Parcial'],
-  pendente: ['badge-red', 'Pendente'],
+  pendente: ['badge-yellow', 'Pendente'],
   bonificado: ['badge-purple', 'Bonificado'],
 };
 const badgeEntrega = {
@@ -237,7 +237,7 @@ export function initPedidos() {
         compra_id: campos.lote.value || null,
         data: campos.data.value,
         qtd: Number(campos.qtd.value) || 1,
-        valor: campos.pagamento.value === 'bonificado' ? 0 : Number(campos.valor.value),
+        valor: campos.pagamento.value === 'bonificado' ? 0 : parseDecimal(campos.valor.value),
         pagamento: campos.pagamento.value,
         entrega: campos.entrega.value,
         dose: campos.dose.value.trim() || null,

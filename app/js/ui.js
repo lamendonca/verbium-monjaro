@@ -31,6 +31,12 @@ export const fmtData = (iso) => {
 
 export const diffDias = (a, b) => Math.round((a - b) / 86400000);
 
+// Aceita vírgula como separador decimal (teclado BR) e retorna Number.
+export function parseDecimal(valor) {
+  if (typeof valor !== 'string') return Number(valor) || 0;
+  return Number(valor.replace(',', '.')) || 0;
+}
+
 // Construtor de DOM seguro: texto sempre via textContent.
 export function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
@@ -66,13 +72,18 @@ export function errorState(container) {
 // ---- Modais slide-up ----
 export function openModal(id) {
   document.getElementById(id).classList.add('open');
+  document.body.style.overflow = 'hidden';
 }
 export function closeModal(id) {
   document.getElementById(id).classList.remove('open');
+  document.body.style.overflow = '';
 }
 // Fechar tocando no overlay (fora do modal).
 document.addEventListener('click', (e) => {
-  if (e.target.classList?.contains('modal-overlay')) e.target.classList.remove('open');
+  if (e.target.classList?.contains('modal-overlay')) {
+    e.target.classList.remove('open');
+    document.body.style.overflow = '';
+  }
 });
 
 // ---- Confirmação estilizada (substitui window.confirm) ----
@@ -132,12 +143,12 @@ export function onClickOnce(botao, handler) {
 }
 
 // ---- Toast curto ("Salvo.") ----
-export function toast(msg) {
+export function toast(msg, { duracao } = {}) {
   const t = el('div', { class: 'card' }, msg);
   Object.assign(t.style, {
     position: 'fixed', bottom: '90px', left: '50%', transform: 'translateX(-50%)',
     zIndex: 200, padding: '10px 18px', fontSize: '14px',
   });
   document.body.append(t);
-  setTimeout(() => t.remove(), 2000);
+  setTimeout(() => t.remove(), duracao || (msg.length > 60 ? 5000 : 2000));
 }

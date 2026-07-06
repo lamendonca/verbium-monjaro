@@ -5,7 +5,7 @@ import { db, list, insert, update, softDelete, listView } from './db.js';
 import {
   el, renderInto, loadingState, emptyState, errorState,
   fmtData, fmtMoney, hojeISO, parseDateLocal, hojeLocal, diffDias,
-  openModal, closeModal, toast, submitOnce, onClickOnce, confirmar,
+  openModal, closeModal, toast, submitOnce, onClickOnce, confirmar, parseDecimal,
 } from './ui.js';
 
 // `indicador` resolve o nome de quem indicou (FK auto-referente da 014).
@@ -95,7 +95,7 @@ const badgeStatus = {
 
 const rotuloOrigem = { maysa: 'Maysa', lucas: 'Lucas' };
 const badgeOrigem = (origem) =>
-  origem ? el('span', { class: 'badge badge-purple' }, rotuloOrigem[origem] || origem) : null;
+  origem ? el('span', { class: 'badge badge-gray' }, rotuloOrigem[origem] || origem) : null;
 
 const rotuloPagamento = { pix: 'Pix', cartao: 'Cartão' };
 const badgeFormaPagamento = (forma) =>
@@ -103,7 +103,7 @@ const badgeFormaPagamento = (forma) =>
 
 const badgeIndicacao = (cliente) =>
   cliente.indicado_por
-    ? el('span', { class: 'badge badge-purple' }, `Indicação de ${cliente.indicador?.nome || '—'}`)
+    ? el('span', { class: 'badge badge-gray' }, `Indicação de ${cliente.indicador?.nome || '—'}`)
     : null;
 
 export function botaoWhatsApp(nome, contato) {
@@ -160,7 +160,7 @@ function itemCliente(cliente, recompra, onEdit, onDetalhe, onTag) {
 
 // ---- Detalhe do cliente (histórico completo) ----
 const badgePag = {
-  pago: ['badge-green', 'Pago'], parcial: ['badge-yellow', 'Parcial'], pendente: ['badge-red', 'Pendente'],
+  pago: ['badge-green', 'Pago'], parcial: ['badge-yellow', 'Parcial'], pendente: ['badge-yellow', 'Pendente'],
   bonificado: ['badge-purple', 'Bonificado'],
 };
 const badgeEnt = {
@@ -188,6 +188,12 @@ let abrirModalClienteRef = null;
 let moverFaseRef = null;
 export function registrarMoverFase(fn) {
   moverFaseRef = fn;
+}
+
+// Registrado por initInicio — abre o modal de novo pedido a partir do detalhe.
+let novoPedidoRef = null;
+export function registrarNovoPedido(fn) {
+  novoPedidoRef = fn;
 }
 
 const FASES_FUNIL = [
@@ -277,7 +283,7 @@ export async function abrirDetalheCliente(cliente, { onEditar, onChanged } = {})
           el('div', { class: 'label' }, 'Negociação atual'),
           el('div', { class: 'value', style: 'color: var(--warning)' },
             cliente.valor_negociacao != null ? fmtMoney(cliente.valor_negociacao) : '—'))),
-      el('div', { style: 'display:flex; gap:8px; margin-bottom:16px' },
+      el('div', { style: 'display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap' },
         botaoWhatsApp(cliente.nome, cliente.contato),
         (() => {
           const editar = onEditar || abrirModalClienteRef;
@@ -288,6 +294,15 @@ export async function abrirDetalheCliente(cliente, { onEditar, onChanged } = {})
               }, 'Editar')
             : null;
         })(),
+        novoPedidoRef
+          ? el('button', {
+              class: 'btn btn-outline btn-sm',
+              onclick: () => {
+                closeModal('modal-detalhe');
+                novoPedidoRef(cliente.id, { onSave: aposMudanca });
+              },
+            }, 'Novo pedido')
+          : null,
         btnPerdido),
       moverFaseRef
         ? el('div', { style: 'margin-bottom:16px' },
@@ -431,7 +446,7 @@ export function initClientes() {
         forma_pagamento: campos.formaPagamento.value || null,
         indicado_por: campos.indicadoPor.value || null,
         anotacao: campos.anotacao.value.trim() || null,
-        valor_negociacao: campos.valorNegociacao.value ? Number(campos.valorNegociacao.value) : null,
+        valor_negociacao: campos.valorNegociacao.value ? parseDecimal(campos.valorNegociacao.value) : null,
       });
       closeModal('modal-cliente');
       toast('Salvo.');

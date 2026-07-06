@@ -6,7 +6,7 @@ import { db, list, insert, update, softDelete } from './db.js';
 import {
   el, renderInto, loadingState, emptyState, errorState,
   fmtMoney, fmtData, hojeISO, openModal, closeModal, toast,
-  submitOnce, onClickOnce, confirmar,
+  submitOnce, onClickOnce, confirmar, parseDecimal,
 } from './ui.js';
 
 export const LOTE_MINIMO = 20;
@@ -98,7 +98,7 @@ export function initCompras() {
 
   function atualizarHints() {
     const qtd = Number(campos.qtd.value);
-    const custo = Number(campos.custo.value);
+    const custo = parseDecimal(campos.custo.value);
     avisoMinimo.classList.toggle('hidden', !qtd || qtd >= LOTE_MINIMO);
     hintUnit.textContent = qtd > 0 && custo > 0 ? `Custo unitário: ${fmtMoney(custo / qtd)}` : '';
   }
@@ -124,7 +124,7 @@ export function initCompras() {
         id: campos.id.value || undefined,
         data: campos.data.value,
         qtd: Number(campos.qtd.value),
-        custo_total: Number(campos.custo.value),
+        custo_total: parseDecimal(campos.custo.value),
         pagamento: campos.pagamento.value,
         chegada: campos.chegada.value || null,
         referencia: campos.referencia.value.trim() || null,
