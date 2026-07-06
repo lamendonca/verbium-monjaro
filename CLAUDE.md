@@ -66,7 +66,7 @@ monjaro/
 
 ## Schema — `monjaro.*` (resumo; fonte da verdade: `data-model.md` + `sql/001_schema.sql`)
 
-- `clientes` — `nome`, `contato` (WhatsApp), `frequencia` (estimativa opcional; efetiva é calculada do histórico), `dose` (opcional), `perdido_em`/`negociacao_em` (funil), `origem` (maysa|lucas), `anotacao`.
+- `clientes` — `nome`, `contato` (WhatsApp), `frequencia` (estimativa opcional; efetiva é calculada do histórico), `dose` (opcional), `perdido_em`/`negociacao_em` (funil), `origem` (maysa|lucas), `anotacao`, `indicado_por` (FK auto-referente — indicações, cadeia multinível).
 - `followups` — mensagens agendadas: FK `cliente_id`, `data`, `mensagem`, `enviado_em` (envio via Evolution/pg_cron). `config` — credenciais (RLS deny; anon não lê).
 - `compras` — lotes do fornecedor: `qtd`, `qtd_disp` (decrementa a cada pedido), `custo_total`, `custo_unit`, `pagamento`, `chegada`, `referencia`.
 - `pedidos` — venda: FK `cliente_id`, FK `compra_id` (lote de baixa, nullable), `valor`, `pagamento`, `entrega`.
@@ -81,8 +81,10 @@ Todas com `id UUID`, `is_active BOOLEAN`, `created_at`, `updated_at`.
 | Alerta de recompra | Avisar **10 dias** antes de `ultimo_pedido + frequencia` dias. |
 | Status do alerta | `atrasado` (passou da data) · `alerta` (≤ 10 dias) · `ok` (> 10 dias). |
 | Estoque | `compras.qtd_disp` decrementa ao vincular um pedido ao lote. |
-| Lucro por lote | receita dos pedidos vinculados − custo do lote. |
+| Lucro por lote | receita dos pedidos **pagos** vinculados − custo do lote; lote com custo 0 (estoque em mãos) fora da view. |
 | Lucro por cliente | receita recebida − custo estimado via lote vinculado. |
+| Bonificado | `pedidos.pagamento='bonificado'`: brinde manual (valor 0, baixa estoque, sem receita/a receber). Regra de campanha é do operador. |
+| Indicações | `indicado_por` + seção mensal no Financeiro (vendas pagas de indicados, diretas/indiretas pela cadeia). |
 | Soft delete | `is_active = false` — nunca DELETE físico. |
 
 ## Interface (detalhe em `ui.md` + `brand.md`)
@@ -90,8 +92,8 @@ Todas com `id UUID`, `is_active BOOLEAN`, `created_at`, `updated_at`.
 - **Mobile first**, **dark mode** padrão (paleta roxa — ver `brand.md`).
 - **Bottom navigation** com 5 abas: **Início · Clientes · Pedidos · Lotes · Financeiro**.
 - Modais slide-up para cadastro/edição.
-- Botão de WhatsApp direto no card do cliente e nos alertas.
-- Início (dashboard) mostra os alertas de recompra dos próximos 10 dias.
+- Botão de WhatsApp direto no card do cliente e nos cards de retomada do funil.
+- Início (dashboard) mostra KPIs + funil de vendas; a coluna Follow-up agrupa por data e mostra ×N de retomadas do ciclo (a antiga lista "acionar nos próximos 10 dias" foi removida).
 
 ## Diretivas para o Claude
 
@@ -151,6 +153,11 @@ Perguntar **uma vez** com as opções mapeadas — não implementar suposição.
 - [x] `.env` com credenciais reais (URL + anon key do mendonca, APP_TOKEN gerado)
 - [x] Policies RLS: gate simples `anon` (ADR-011; `sql/002` + `sql/003` — anon sem DELETE/TRUNCATE)
 - [x] Schema `monjaro` exposto na API (verificado via REST: select/insert/update ok, delete 42501)
+- [x] Estorno no funil: Pendente/Pago → Follow-up remove o pedido (confirmação; estoque volta) — `inicio.js`
+- [x] Receita só de pedido pago na `v_lucro_por_lote` + lote custo 0 fora (migration `013`)
+- [x] Indicações multinível: `indicado_por` (migration `014`), badge/filtro, cadeia no detalhe, seção "Indicações do mês" no Financeiro
+- [x] Pedido bonificado (`pagamento='bonificado'`, valor 0 travado) e lote sem pagamento (custo opcional)
+- [x] Funil: coluna Follow-up agrupada por data + badge ×N de retomadas + badge de frequência; lista de alertas do Início removida
 
 > Estrutura: além dos módulos spec'ados existem `app/js/ui.js` (helpers de
 > apresentação compartilhados) e `app/js/inicio.js` (dashboard — compõe

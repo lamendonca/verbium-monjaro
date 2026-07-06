@@ -24,7 +24,7 @@ Especificação das telas para implementação. Mobile-first, 1 `app/index.html`
 
 | Aba | id da página | Conteúdo |
 |---|---|---|
-| 🏠 Início | `page-inicio` | KPIs + alertas de recompra (próx. 10 dias) |
+| 🏠 Início | `page-inicio` | KPIs + funil de vendas (kanban) |
 | 👤 Clientes | `page-clientes` | Lista + busca + CRUD + status de recompra + WhatsApp |
 | 🧾 Pedidos | `page-pedidos` | Lista filtrável + CRUD + vínculo a lote + status |
 | 📦 Lotes | `page-lotes` | Lista de compras/lotes + CRUD + estoque disponível |
@@ -34,16 +34,16 @@ Trocar de aba: `document.querySelectorAll('.page').forEach(p=>p.classList.remove
 
 ## Tela: Início (dashboard)
 
-Objetivo: o operador abre o app e vê **quem acionar** e o **resumo do negócio**.
+Objetivo: o operador abre o app e vê o **funil de atendimento** e o **resumo do negócio**.
 
 - **Summary grid (2 col)** com KPIs:
   - Clientes ativos
   - Estoque livre (Σ `compras.qtd_disp` dos lotes ativos)
-  - A receber (Σ `valor` de pedidos com `pagamento ≠ pago`)
+  - A receber (Σ `valor` de pedidos `pendente`/`parcial`)
   - Lucro consolidado (Σ lucro por lote) — ver `business-rules.md`
-- **Funil de vendas (kanban)**: 4 colunas com rolagem horizontal — Não iniciada · Pendente pagamento · Pago · Entregue medicação. Fases derivadas do último pedido + recompra (`business-rules.md` §6); cards de retomada trazem botão WhatsApp.
-- **Card "Acionar nos próximos 10 dias"**: lista de clientes com `status ∈ {atrasado, alerta}`, ordenados por `proxima_recompra` ascendente. Cada linha: nome + sub ("recompra em X dias" / "atrasado há X dias") + badge de status + botão WhatsApp.
-- Empty state se ninguém a acionar.
+- **Funil de vendas (kanban)**: colunas com rolagem horizontal — Não iniciada · Follow-up · Pendente pagamento · Pago · Entregue medicação · Perdido. Fases derivadas do último pedido + recompra (`business-rules.md` §6); cards de retomada trazem botão WhatsApp; badge "a cada N dias" quando há frequência.
+- **Coluna Follow-up**: subcabeçalhos por data (Hoje / Amanhã / Atrasado · dd/mm / dd/mm) + badge ×N de retomadas do ciclo.
+- A antiga lista "Acionar nos próximos 10 dias" foi removida — a retomada vive no funil.
 
 ## Tela: Clientes
 
@@ -58,7 +58,7 @@ Objetivo: o operador abre o app e vê **quem acionar** e o **resumo do negócio*
 - Lista de `pedidos` ativos, mais recentes primeiro. Filtro por status (tabs: Todos / Pendentes / A entregar).
 - Cada item: nome do cliente + data + valor + badges (pagamento, entrega) + lote vinculado (se houver).
 - Botão "+": modal de pedido.
-- **Modal pedido** (campos): `cliente*` (select de clientes ativos), `data*`, `qtd` (default 1), `valor*`, `compra_id` (select de lotes com `qtd_disp > 0`, opcional), `pagamento` (pendente/parcial/pago), `entrega` (aguardando/separado/entregue), `dose` (opcional).
+- **Modal pedido** (campos): `cliente*` (select de clientes ativos), `data*`, `qtd` (default 1), `valor*`, `compra_id` (select de lotes com `qtd_disp > 0`, opcional), `pagamento` (pendente/parcial/pago/bonificado — bonificado trava o valor em R$ 0), `entrega` (aguardando/separado/entregue), `dose` (opcional).
 - Ao salvar com `compra_id`: **decrementa `compras.qtd_disp`** em `qtd` (ver `business-rules.md` → Estoque). Ao trocar/remover o lote, ajustar de volta.
 - "Excluir" = soft delete + devolver estoque se estava vinculado.
 
@@ -68,14 +68,15 @@ Objetivo: o operador abre o app e vê **quem acionar** e o **resumo do negócio*
 - Cada item: referência + data + `qtd_disp/qtd` disponível + custo total + badge de pagamento + barra de progresso de consumo do lote.
 - Aviso visual se `qtd < 20` (lote abaixo do mínimo viável).
 - Botão "+": modal de lote.
-- **Modal lote** (campos): `data*`, `qtd*`, `custo_total*`, `pagamento` (pendente/parcial/pago), `chegada` (opcional), `referencia` (opcional). `custo_unit` = `custo_total/qtd` (calculado, exibido). `qtd_disp` inicia = `qtd`.
+- **Modal lote** (campos): `data*`, `qtd*`, `custo_total` (opcional — vazio grava 0: estoque em mãos, fora do lucro), `pagamento` (pendente/parcial/pago/sem pagamento), `chegada` (opcional), `referencia` (opcional). `custo_unit` = `custo_total/qtd` (calculado, exibido). `qtd_disp` inicia = `qtd`.
 - "Excluir" = soft delete (não apaga pedidos vinculados).
 
 ## Tela: Financeiro
 
-- **Por lote** (`v_lucro_por_lote`): card por lote com receita, custo, lucro e nº de unidades vendidas/restantes.
+- **Por lote** (`v_lucro_por_lote`): card por lote com receita (só pedidos pagos), custo, lucro e nº de unidades vendidas/restantes. Lotes sem custo (expedição) ficam fora.
 - **Por cliente**: receita recebida − custo estimado (via lote vinculado) — ver `business-rules.md` → Lucro por cliente.
 - **Consolidado**: total investido (Σ custo_total), total recebido (Σ valor pago), a receber, lucro líquido.
+- **Indicações do mês**: `<input type="month">` + card por indicador com vendas diretas/indiretas de indicados no mês e marca "bonificado ✓" — ver `business-rules.md` §4.
 - Cores: lucro positivo em `--success`, negativo em `--danger`.
 
 ## Padrões transversais
@@ -92,7 +93,7 @@ Objetivo: o operador abre o app e vê **quem acionar** e o **resumo do negócio*
 | Tela | Módulo principal | Lê/escreve |
 |---|---|---|
 | Login | `auth.js` | `APP_TOKEN` + `localStorage` |
-| Início | `clientes.js` (alertas) + `financeiro.js` (KPIs) | views/recompra |
+| Início | `inicio.js` (funil/KPIs, compõe `clientes.js` + `financeiro.js`) | views/recompra + followups |
 | Clientes | `clientes.js` | `monjaro.clientes` |
 | Pedidos | `pedidos.js` | `monjaro.pedidos` (+ baixa em `compras`) |
 | Lotes | `compras.js` | `monjaro.compras` |
