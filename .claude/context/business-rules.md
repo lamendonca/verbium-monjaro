@@ -81,21 +81,26 @@ lucro_lote   = receita_lote - compras.custo_total
 Fonte pronta: view `monjaro.v_lucro_por_lote` (migration `013`). Pendente/parcial ainda **não é receita** (aparece só no "a receber"); bonificado nunca é. Lotes com `custo_total = 0` (estoque em mãos, "sem pagamento") ficam **fora da view** — são só expedição e inflariam o lucro. Lucro de lote ainda não esgotado é parcial (parte do estoque não virou receita) — exibir junto `qtd_disp/qtd` para dar contexto.
 
 ### Lucro por cliente
-Receita recebida do cliente menos o custo estimado das unidades que ele comprou, via custo unitário do lote de cada pedido:
+Receita recebida do cliente menos o custo estimado das unidades que ele comprou, via custo unitário do lote de cada pedido, **incorporando os lançamentos avulsos** do cliente (abaixo):
 ```
 receita_cliente = Σ pedidos.valor          (do cliente, pedidos ativos)
 custo_cliente   = Σ (pedido.qtd * custo_unit_do_lote_vinculado)
                   -- pedidos sem compra_id: custo desconhecido → tratar como 0
                      e sinalizar "custo não rastreado" na UI
-lucro_cliente   = receita_cliente - custo_cliente
+avulso_cliente  = Σ lancamentos.valor WHERE tipo='receita' - Σ lancamentos.valor WHERE tipo='despesa'
+lucro_cliente   = receita_cliente - custo_cliente + avulso_cliente
 ```
+Cliente sem nenhum pedido, mas com lançamento avulso, ainda aparece na lista (lucro = só o avulso).
+
+### Lançamentos avulsos
+Despesa ou receita solta ligada a um cliente, fora do fluxo de pedido/lote (ex.: reembolso, taxa extra) — tabela `monjaro.lancamentos` (migration `015`). Cadastrada na tela Financeiro, sempre com um cliente vinculado. O sinal vem do `tipo` (`receita`/`despesa`); `valor` é sempre positivo no banco. Entra no lucro por cliente (acima) e no consolidado (abaixo) — não afeta `investido`/`recebido`/`a_receber`, que são conceitos específicos de lote/pedido.
 
 ### Consolidado (tela Financeiro / KPIs do Início)
 ```
 investido    = Σ compras.custo_total            (lotes ativos)
 recebido     = Σ pedidos.valor WHERE pagamento='pago'
 a_receber    = Σ pedidos.valor WHERE pagamento IN ('pendente','parcial')   -- bonificado fora
-lucro_total  = Σ lucro_lote                     (v_lucro_por_lote)
+lucro_total  = Σ lucro_lote (v_lucro_por_lote) + Σ lancamentos.receita - Σ lancamentos.despesa
 ```
 
 > "Recebido parcial": no MVP, `parcial` conta como **a receber** (não temos coluna de valor pago parcial). Se o operador precisar do valor exato pago, adicionar `valor_pago` numa migration futura — não inventar agora.

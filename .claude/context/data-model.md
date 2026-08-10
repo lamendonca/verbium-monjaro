@@ -96,6 +96,25 @@ Notas:
 - `data` + `cliente.frequencia` define a próxima data de recompra esperada (base do alerta de Início).
 - Status de pagamento/entrega são strings controladas — validar no front contra a lista permitida.
 
+### `monjaro.lancamentos`
+Despesa ou receita avulsa ligada a um cliente, fora do fluxo de pedido/lote (ex.: reembolso, taxa extra). Migration `015`.
+
+| Coluna | Tipo | Observação |
+|---|---|---|
+| `id` | UUID PK | |
+| `cliente_id` | UUID NOT NULL FK → clientes(id) | sempre ligado a um cliente, sem lançamento "geral" |
+| `tipo` | TEXT NOT NULL | `receita` · `despesa` (CHECK) |
+| `valor` | NUMERIC(10,2) NOT NULL | sempre positivo (CHECK `> 0`) — o sinal vem do `tipo` |
+| `descricao` | TEXT NULL | detalhe livre do lançamento |
+| `data` | DATE NOT NULL DEFAULT CURRENT_DATE | |
+| `is_active` | BOOLEAN NOT NULL DEFAULT true | soft delete |
+| `created_at` | TIMESTAMPTZ DEFAULT NOW() | |
+| `updated_at` | TIMESTAMPTZ DEFAULT NOW() | trigger |
+
+Notas:
+- Entra no lucro por cliente (incorporado ao número exibido) e no consolidado do Financeiro: `lucro_total += Σreceita − Σdespesa` (ver `business-rules.md` §4).
+- Não afeta `investido`/`recebido`/`a_receber` do consolidado — esses são conceitos específicos de lote/pedido.
+
 ## Domínios de valores (enums por convenção, validados na aplicação)
 
 | Campo | Valores |
