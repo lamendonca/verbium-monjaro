@@ -6,7 +6,7 @@ import { db, list, insert, update, softDelete } from './db.js';
 import {
   el, renderInto, loadingState, emptyState, errorState,
   fmtMoney, fmtData, hojeISO, openModal, closeModal, toast,
-  submitOnce, onClickOnce, confirmar,
+  submitOnce, onClickOnce, confirmar, parseDecimal,
 } from './ui.js';
 
 export const LOTE_MINIMO = 20;
@@ -39,6 +39,7 @@ const badgePagamento = {
   pago: ['badge-green', 'Pago'],
   parcial: ['badge-yellow', 'Parcial'],
   pendente: ['badge-red', 'Pendente'],
+  sem_pagamento: ['badge-gray', 'Sem pagamento'], // estoque em mãos — não é dívida
 };
 
 function itemLote(lote, onEdit) {
@@ -48,9 +49,14 @@ function itemLote(lote, onEdit) {
     el('div', { class: 'info' },
       el('div', { class: 'title' }, lote.referencia || `Lote de ${fmtData(lote.data)}`),
       el('div', { class: 'sub' },
-        `${fmtData(lote.data)} · ${lote.qtd_disp}/${lote.qtd} disponível · ${fmtMoney(lote.custo_total)} (${fmtMoney(lote.custo_unit)}/un)`),
+        Number(lote.custo_total) > 0
+          ? `${fmtData(lote.data)} · ${lote.qtd_disp}/${lote.qtd} disponível · ${fmtMoney(lote.custo_total)} (${fmtMoney(lote.custo_unit)}/un)`
+          : `${fmtData(lote.data)} · ${lote.qtd_disp}/${lote.qtd} disponível`),
       el('div', { class: 'badges' },
         el('span', { class: `badge ${cls}` }, label),
+        Number(lote.custo_total) > 0
+          ? null
+          : el('span', { class: 'badge badge-gray' }, 'sem custo — fora do lucro'),
         lote.qtd < LOTE_MINIMO ? el('span', { class: 'badge badge-yellow' }, '⚠️ abaixo do mínimo') : null,
         lote.chegada ? el('span', { class: 'badge badge-gray' }, `chegada ${fmtData(lote.chegada)}`) : null),
       el('div', { class: 'progress' },
@@ -92,7 +98,7 @@ export function initCompras() {
 
   function atualizarHints() {
     const qtd = Number(campos.qtd.value);
-    const custo = Number(campos.custo.value);
+    const custo = parseDecimal(campos.custo.value);
     avisoMinimo.classList.toggle('hidden', !qtd || qtd >= LOTE_MINIMO);
     hintUnit.textContent = qtd > 0 && custo > 0 ? `Custo unitário: ${fmtMoney(custo / qtd)}` : '';
   }
@@ -118,7 +124,7 @@ export function initCompras() {
         id: campos.id.value || undefined,
         data: campos.data.value,
         qtd: Number(campos.qtd.value),
-        custo_total: Number(campos.custo.value),
+        custo_total: parseDecimal(campos.custo.value),
         pagamento: campos.pagamento.value,
         chegada: campos.chegada.value || null,
         referencia: campos.referencia.value.trim() || null,

@@ -10,7 +10,7 @@ import { listarLotes } from './compras.js';
 import {
   el, renderInto, loadingState, emptyState, errorState,
   fmtMoney, fmtData, hojeISO, openModal, closeModal, toast,
-  submitOnce, onClickOnce, confirmar,
+  submitOnce, onClickOnce, confirmar, parseDecimal,
 } from './ui.js';
 
 const SELECT_PEDIDO = '*, cliente:cliente_id(nome), lote:compra_id(referencia, data)';
@@ -51,6 +51,15 @@ export async function salvarPedido(pedido, anterior) {
   }
   const { id, ...resto } = pedido;
   const salvo = id ? await update('pedidos', id, resto) : await insert('pedidos', resto);
+  if (!id) {
+    // Pedido novo encerra negociação e perdido — a derivação por data falha
+    // quando tudo acontece no MESMO dia (negociacao_em >= data mandava o
+    // card concluído de volta pra "Não iniciada"). Best-effort: falhar aqui
+    // não pode desfazer a venda.
+    try {
+      await update('clientes', pedido.cliente_id, { negociacao_em: null, perdido_em: null });
+    } catch { /* o funil se corrige no próximo pedido/retomada */ }
+  }
   const aplicados = []; // ajustes já efetivados, pra desfazer se um falhar
   try {
     // Devolve ao lote antigo e debita do novo (mesmo lote → ajuste líquido).
@@ -101,7 +110,8 @@ export async function novoPedidoParaCliente(clienteId, { pagamento, entrega, onS
 const badgePagamento = {
   pago: ['badge-green', 'Pago'],
   parcial: ['badge-yellow', 'Parcial'],
-  pendente: ['badge-red', 'Pendente'],
+  pendente: ['badge-yellow', 'Pendente'],
+  bonificado: ['badge-purple', 'Bonificado'],
 };
 const badgeEntrega = {
   entregue: ['badge-green', 'Entregue'],
@@ -111,7 +121,8 @@ const badgeEntrega = {
 
 const FILTROS = {
   todos: () => true,
-  pendentes: (p) => p.pagamento !== 'pago',
+  // bonificado não é cobrança pendente — brinde não tem o que receber
+  pendentes: (p) => p.pagamento === 'pendente' || p.pagamento === 'parcial',
   entregar: (p) => p.entrega !== 'entregue',
 };
 
@@ -163,6 +174,13 @@ export function initPedidos() {
     ]);
   }
 
+  // Bonificado é brinde: valor travado em 0 pra não inflar receita/a receber.
+  function aplicarBonificado() {
+    const bonificado = campos.pagamento.value === 'bonificado';
+    if (bonificado) campos.valor.value = '0';
+    campos.valor.disabled = bonificado;
+  }
+
   async function abrirModal(pedido) {
     form.reset();
     emEdicao = pedido || null;
@@ -176,6 +194,7 @@ export function initPedidos() {
     campos.pagamento.value = pedido?.pagamento || 'pendente';
     campos.entrega.value = pedido?.entrega || 'aguardando';
     campos.dose.value = pedido?.dose || '';
+    aplicarBonificado();
     document.getElementById('modal-pedido-titulo').textContent = pedido ? 'Editar pedido' : 'Novo pedido';
     btnRemover.classList.toggle('hidden', !pedido);
     openModal('modal-pedido');
@@ -207,6 +226,7 @@ export function initPedidos() {
   });
 
   document.getElementById('btn-novo-pedido').addEventListener('click', () => abrirModal(null));
+  campos.pagamento.addEventListener('change', aplicarBonificado);
   abrirModalRef = abrirModal;
 
   submitOnce(form, async () => {
@@ -217,7 +237,7 @@ export function initPedidos() {
         compra_id: campos.lote.value || null,
         data: campos.data.value,
         qtd: Number(campos.qtd.value) || 1,
-        valor: Number(campos.valor.value),
+        valor: campos.pagamento.value === 'bonificado' ? 0 : parseDecimal(campos.valor.value),
         pagamento: campos.pagamento.value,
         entrega: campos.entrega.value,
         dose: campos.dose.value.trim() || null,

@@ -1,22 +1,35 @@
-// inicio.js — dashboard: KPIs, funil de vendas (kanban) e alertas de recompra.
+// inicio.js — dashboard: KPIs e funil de vendas (kanban).
 // Compõe dados de clientes.js, pedidos.js, compras.js e financeiro.js.
 // Funil: fases derivadas do último pedido + status de recompra
-// (business-rules.md §8) — nenhum estado extra é persistido.
+// (business-rules.md §6) — nenhum estado extra é persistido. A antiga
+// lista "acionar nos próximos 10 dias" saiu: a retomada vive no funil
+// (coluna Follow-up + retomada automática pra Não iniciada).
 
 import {
   listarClientes, recompraPorCliente, botaoWhatsApp, abrirDetalheCliente,
   estaPerdido, marcarPerdido, retomarCliente, marcarNegociacao, PERDIDO_DIAS_VISIVEL,
-  cancelarFollowupsPendentes, registrarMoverFase,
+  cancelarFollowupsPendentes, registrarMoverFase, registrarNovoPedido,
 } from './clientes.js';
 import { listarPedidos, novoPedidoParaCliente, removerPedido } from './pedidos.js';
 import { estoqueLivre } from './compras.js';
 import { consolidado } from './financeiro.js';
 import { db, update, insert } from './db.js';
 import {
-  el, renderInto, loadingState, emptyState, errorState, fmtMoney, fmtData,
+  el, renderInto, loadingState, errorState, fmtMoney, fmtData,
   parseDateLocal, hojeLocal, diffDias, hojeISO, toast, openModal, closeModal,
   submitOnce, confirmar,
 } from './ui.js';
+
+// Rótulos abreviados para os chips do banner de mover (touch).
+const FASES_BANNER = [
+  ['nao_iniciada', 'Não inic.'],
+  ['followup', 'Follow-up'],
+  ['pendente', 'Pendente'],
+  ['pago', 'Pago'],
+  ['entregar', 'Entregar'],
+  ['entregue', 'Concluído'],
+  ['perdido', 'Perdido'],
+];
 
 // ---- Follow-up (mensagem automática via Evolution — business-rules.md §6) ----
 async function followupsPendentes() {
@@ -42,19 +55,23 @@ function abrirModalFollowup(cliente, onSave) {
   openModal('modal-followup');
 }
 
-function itemAlerta(a) {
-  const atrasado = a.status === 'atrasado';
-  const sub = atrasado
-    ? `atrasado há ${Math.abs(a.dias_restantes)} dia(s)`
-    : a.dias_restantes === 0 ? 'recompra hoje' : `recompra em ${a.dias_restantes} dia(s)`;
-  return el('div', { class: 'list-item' },
-    el('div', { class: 'info' },
-      el('div', { class: 'title' }, a.nome),
-      el('div', { class: 'sub' }, sub),
-      el('div', { class: 'badges' },
-        el('span', { class: `badge ${atrasado ? 'badge-red' : 'badge-yellow'}` },
-          atrasado ? 'Atrasado' : 'Alerta'))),
-    el('div', { class: 'actions' }, botaoWhatsApp(a.nome, a.contato)));
+// Retomadas do ciclo atual: cada volta ao Follow-up insere uma linha em
+// followups (ativa, cancelada ou enviada — todas contam como acionamento).
+// Ciclo = desde o último pedido; sem pedido, desde o cadastro.
+async function todosFollowups() {
+  const { data, error } = await db.from('followups').select('cliente_id, created_at');
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+function contarRetomadas(followups, ultimoPedidoMap) {
+  const mapa = new Map();
+  for (const f of followups) {
+    const p = ultimoPedidoMap.get(f.cliente_id);
+    if (p && f.created_at.slice(0, 10) < p.data) continue; // ciclo anterior, já fechado
+    mapa.set(f.cliente_id, (mapa.get(f.cliente_id) || 0) + 1);
+  }
+  return mapa;
 }
 
 // ---- Funil (kanban) ----
@@ -62,8 +79,11 @@ function itemAlerta(a) {
 // recompra > descanso em "entregue". Cliente sem pedido = topo do funil.
 // Perdido fica visível por PERDIDO_DIAS_VISIVEL dias e some do funil
 // (e dos alertas) até novo pedido ou retomada manual.
+// Nada a receber deste pedido: pago de verdade ou brinde (bonificado, valor 0).
+const quitado = (p) => p.pagamento === 'pago' || p.pagamento === 'bonificado';
+
 function montarFunil(clientes, recompraMap, ultimoPedidoMap, followupMap) {
-  const fases = { nao_iniciada: [], followup: [], pendente: [], pago: [], entregue: [], perdido: [] };
+  const fases = { nao_iniciada: [], followup: [], pendente: [], pago: [], entregar: [], entregue: [], perdido: [] };
   for (const c of clientes) {
     const r = recompraMap.get(c.id);
     const p = ultimoPedidoMap.get(c.id);
@@ -81,10 +101,25 @@ function montarFunil(clientes, recompraMap, ultimoPedidoMap, followupMap) {
       fases.followup.push({ c, p, f, sub: `mensagem em ${fmtData(f.data)}`, data: f.data });
     } else if (!p) {
       fases.nao_iniciada.push({ c, sub: `novo — em negociação${referencia}`, urgencia: 1 });
-    } else if (p.pagamento !== 'pago') {
+    } else if (!quitado(p)) {
       fases.pendente.push({ c, p, sub: `${fmtMoney(p.valor)} · pedido de ${fmtData(p.data)}` });
+    } else if (p.entrega === 'aguardando') {
+      fases.pago.push({
+        c,
+        p,
+        sub: p.pagamento === 'bonificado'
+          ? 'bonificado — separar'
+          : `${fmtMoney(p.valor)} · pago — separar`,
+      });
     } else if (p.entrega !== 'entregue') {
-      fases.pago.push({ c, p, sub: `${fmtMoney(p.valor)} · pago, separar/entregar` });
+      // separado: na fila de entrega
+      fases.entregar.push({
+        c,
+        p,
+        sub: p.pagamento === 'bonificado'
+          ? 'bonificado — entregar'
+          : `${fmtMoney(p.valor)} · entregar`,
+      });
     } else if (c.negociacao_em && c.negociacao_em >= p.data) {
       // retomada manual (arrasto): em negociação até sair novo pedido
       fases.nao_iniciada.push({ c, sub: `em negociação${referencia}`, urgencia: 1, whatsapp: true });
@@ -114,9 +149,27 @@ async function moverCard(item, de, para, onChanged) {
     // movimento se concretizar: recusar um confirm ou abandonar o modal
     // não pode apagar um follow-up agendado em silêncio.
     if (para === 'followup') {
+      // Voltar pro follow-up com pedido em aberto = estornar a venda:
+      // pendente não é receita e o estoque precisa voltar ao lote.
+      const desfazPedido = p && (de === 'pendente' || de === 'pago');
+      if (desfazPedido) {
+        const aviso = de === 'pago'
+          ? `Voltar ${c.nome} pro follow-up desfaz a venda paga (o pedido some e o estoque volta ao lote). Continuar?`
+          : `Voltar ${c.nome} pro follow-up remove o pedido em aberto (o estoque volta ao lote). Continuar?`;
+        if (!await confirmar(aviso, { rotulo: 'Remover pedido' })) return;
+      }
       if (de === 'perdido') await retomarCliente(c.id);
-      // agendarFollowup (no save do modal) já cancela o pendente anterior
-      abrirModalFollowup(c, onChanged);
+      // agendarFollowup (no save do modal) já cancela o pendente anterior.
+      // O pedido só é removido DEPOIS do follow-up salvo — abandonar o
+      // modal não pode apagar a venda em silêncio.
+      abrirModalFollowup(c, !desfazPedido ? onChanged : async () => {
+        try {
+          await removerPedido({ id: p.id, compra_id: p.compra_id, qtd: p.qtd });
+        } catch (err) {
+          toast(`Follow-up salvo, mas não consegui remover o pedido: ${err.message}`);
+        }
+        onChanged();
+      });
       return;
     }
     if (para === 'perdido') {
@@ -146,7 +199,7 @@ async function moverCard(item, de, para, onChanged) {
       if (de === 'perdido') await retomarCliente(c.id);
       return novoPedidoParaCliente(c.id, {
         pagamento: para === 'pendente' ? 'pendente' : 'pago',
-        entrega: para === 'entregue' ? 'entregue' : 'aguardando',
+        entrega: para === 'entregue' ? 'entregue' : para === 'entregar' ? 'separado' : 'aguardando',
         onSave: async () => {
           if (de === 'followup') await cancelarFollowupsPendentes(c.id);
           onChanged();
@@ -157,13 +210,22 @@ async function moverCard(item, de, para, onChanged) {
     if (para === 'pendente') patch.pagamento = 'pendente';
     if (para === 'pago') {
       patch.pagamento = 'pago';
-      if (p.entrega === 'entregue') patch.entrega = 'separado'; // voltando da entrega
+      if (p.entrega !== 'aguardando') patch.entrega = 'aguardando'; // voltando da fila/entrega
+    }
+    if (para === 'entregar') {
+      // entregar um brinde não o transforma em venda paga
+      if (p.pagamento !== 'bonificado') patch.pagamento = 'pago';
+      patch.entrega = 'separado';
     }
     if (para === 'entregue') {
-      patch.pagamento = 'pago';
+      if (p.pagamento !== 'bonificado') patch.pagamento = 'pago';
       patch.entrega = 'entregue';
     }
     await update('pedidos', p.id, patch);
+    // Mover pra fase de pedido encerra a negociação manual — sem isso, um
+    // pedido do MESMO dia da retomada (negociacao_em >= data) devolveria o
+    // card concluído pra "Não iniciada".
+    if (c.negociacao_em) await update('clientes', c.id, { negociacao_em: null });
     if (de === 'followup') await cancelarFollowupsPendentes(c.id);
     toast('Movido.');
     onChanged();
@@ -197,11 +259,18 @@ function entrarModoMover(card, item, fase, onChanged) {
   navigator.vibrate?.(15);
   // o clique disparado ao soltar o dedo do long-press não é uma escolha
   ignorarCliquePosPegar = true;
-  document.addEventListener('pointerup', () => {
-    setTimeout(() => { ignorarCliquePosPegar = false; }, 350);
-  }, { once: true });
+  const resetarFlag = () => setTimeout(() => { ignorarCliquePosPegar = false; }, 350);
+  document.addEventListener('pointerup', resetarFlag, { once: true });
+  document.addEventListener('pointercancel', resetarFlag, { once: true });
   bannerMover = el('div', { class: 'mover-banner' },
-    el('div', {}, `Movendo ${item.c.nome} — toque na fase de destino`),
+    el('div', { class: 'mover-banner-titulo' }, `Movendo ${item.c.nome}`),
+    el('div', { class: 'mover-banner-fases' },
+      FASES_BANNER.map(([key, rotulo]) =>
+        el('button', {
+          class: `tab${key === fase ? ' active' : ''}`,
+          disabled: key === fase,
+          onclick: () => concluirModoMover(key),
+        }, rotulo))),
     el('button', { class: 'btn btn-outline btn-sm', onclick: sairModoMover }, 'Cancelar'));
   document.body.append(bannerMover);
 }
@@ -341,9 +410,16 @@ function cardFunil(item, fase, onChanged) {
       },
     }, 'Retomar'));
   }
+  const badges = [];
+  const freq = recompraAtual.get(c.id)?.frequencia;
+  if (freq) badges.push(el('span', { class: 'badge badge-gray' }, `a cada ${freq} dias`));
+  // quantas vezes o card voltou pro follow-up neste ciclo (1ª vez não é "voltar")
+  const retomadas = fase === 'followup' ? retomadasAtual.get(c.id) || 0 : 0;
+  if (retomadas >= 2) badges.push(el('span', { class: 'badge badge-yellow' }, `×${retomadas}`));
   const card = el('div', { class: 'kanban-card', style: 'cursor:grab' },
     el('div', { class: 'title' }, c.nome),
     el('div', { class: 'sub' }, sub),
+    badges.length ? el('div', { class: 'badges' }, badges) : null,
     // stopPropagation: ações não devem abrir o detalhe do cliente junto.
     acoes.length
       ? el('div', { class: 'acao', style: 'display:flex; gap:6px', onclick: (e) => e.stopPropagation() }, acoes)
@@ -355,12 +431,30 @@ function cardFunil(item, fase, onChanged) {
   return card;
 }
 
+// "Hoje"/"Amanhã"/data — cabeçalho dos grupos de data da coluna Follow-up,
+// pra enxergar como a fila de mensagens vai se comportar.
+function rotuloDataFollowup(dataISO) {
+  const dias = diffDias(parseDateLocal(dataISO), hojeLocal());
+  if (dias < 0) return { rotulo: `Atrasado · ${fmtData(dataISO)}`, atrasado: true };
+  if (dias === 0) return { rotulo: 'Hoje', atrasado: false };
+  if (dias === 1) return { rotulo: 'Amanhã', atrasado: false };
+  return { rotulo: fmtData(dataISO), atrasado: false };
+}
+
 function colunaFunil(titulo, fase, cards, onChanged) {
+  const filhos = [];
+  let dataAnterior = null;
+  for (const item of cards) {
+    if (fase === 'followup' && item.data && item.data !== dataAnterior) {
+      dataAnterior = item.data;
+      const { rotulo, atrasado } = rotuloDataFollowup(item.data);
+      filhos.push(el('div', { class: `col-subheader${atrasado ? ' atrasado' : ''}` }, rotulo));
+    }
+    filhos.push(cardFunil(item, fase, onChanged));
+  }
   const col = el('div', { class: 'kanban-col', 'data-fase': fase },
     el('div', { class: 'col-title' }, titulo, el('span', { class: 'count' }, cards.length)),
-    cards.length
-      ? cards.map((card) => cardFunil(card, fase, onChanged))
-      : el('div', { class: 'vazio' }, '—'));
+    filhos.length ? filhos : el('div', { class: 'vazio' }, '—'));
   // Com card pego, QUALQUER toque na coluna (título, card, vazio) é escolha
   // de destino — captura impede o clique de abrir detalhe/ações.
   col.addEventListener('click', (e) => {
@@ -377,9 +471,10 @@ function colunaFunil(titulo, fase, cards, onChanged) {
 // usado pelo "Mover no funil" do detalhe do cliente.
 let indiceFunil = new Map();
 let ultimoPedidoAtual = new Map();
+let recompraAtual = new Map(); // badge de frequência nos cards
+let retomadasAtual = new Map(); // ×N de voltas ao follow-up no ciclo
 
 export function initInicio() {
-  const listaAlertas = document.getElementById('lista-alertas');
   const funilEl = document.getElementById('funil');
 
   submitOnce(document.getElementById('form-followup'), async () => {
@@ -400,12 +495,11 @@ export function initInicio() {
 
   async function refresh() {
     sairModoMover(); // re-render invalida o card pego
-    loadingState(listaAlertas);
     loadingState(funilEl);
     try {
-      const [clientes, pedidos, recompra, followups, estoque, cons] = await Promise.all([
+      const [clientes, pedidos, recompra, followups, estoque, cons, historicoFups] = await Promise.all([
         listarClientes(), listarPedidos(), recompraPorCliente(), followupsPendentes(),
-        estoqueLivre(), consolidado(),
+        estoqueLivre(), consolidado(), todosFollowups(),
       ]);
       document.getElementById('kpi-clientes').textContent = clientes.length;
       document.getElementById('kpi-estoque').textContent = `${estoque} un`;
@@ -427,26 +521,20 @@ export function initInicio() {
         for (const it of itens) indiceFunil.set(it.c.id, { item: it, fase: faseKey });
       }
       ultimoPedidoAtual = ultimoPedidoMap;
+      recompraAtual = recompraMap;
+      retomadasAtual = contarRetomadas(historicoFups, ultimoPedidoMap);
       renderInto(funilEl, [
         colunaFunil('Não iniciada', 'nao_iniciada', fases.nao_iniciada, refresh),
         colunaFunil('Follow-up', 'followup', fases.followup, refresh),
         colunaFunil('Pendente pagamento', 'pendente', fases.pendente, refresh),
         colunaFunil('Pago', 'pago', fases.pago, refresh),
-        colunaFunil('Entregue medicação', 'entregue', fases.entregue, refresh),
+        colunaFunil('Entregar medicação', 'entregar', fases.entregar, refresh),
+        colunaFunil('Concluído', 'entregue', fases.entregue, refresh),
         colunaFunil('Perdido', 'perdido', fases.perdido, refresh),
       ]);
 
-      // Perdidos ficam fora dos alertas até novo pedido ou retomada.
-      const clientePorId = new Map(clientes.map((c) => [c.id, c]));
-      const avisos = recompra
-        .filter((r) => r.status === 'atrasado' || r.status === 'alerta')
-        .filter((r) => !estaPerdido(clientePorId.get(r.cliente_id) || {}, r.ultimo_pedido))
-        .sort((a, b) => a.proxima_recompra.localeCompare(b.proxima_recompra));
-      if (avisos.length) renderInto(listaAlertas, avisos.map(itemAlerta));
-      else emptyState(listaAlertas, '🎉', 'Ninguém para acionar nos próximos 10 dias.');
     } catch {
       errorState(funilEl);
-      errorState(listaAlertas);
     }
   }
 
@@ -458,6 +546,8 @@ export function initInicio() {
     const item = atual?.item || { c: cliente, p: ultimoPedidoAtual.get(cliente.id) };
     await moverCard(item, de, para, refresh);
   });
+
+  registrarNovoPedido(novoPedidoParaCliente);
 
   return refresh;
 }

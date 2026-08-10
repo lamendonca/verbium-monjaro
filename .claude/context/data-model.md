@@ -41,6 +41,7 @@ Quem compra. Cadastro mínimo (decisão do operador: só nome, contato e frequê
 | `anotacao` | TEXT NULL | anotação livre do operador (migration `008`) |
 | `valor_negociacao` | NUMERIC(10,2) NULL | preço da negociação em andamento (migration `010`) |
 | `forma_pagamento` | TEXT NULL | preferência do cliente: `pix` · `cartao` (migration `011`) |
+| `indicado_por` | UUID NULL FK → clientes(id) | quem indicou o cliente; cadeia multinível sai da FK (migration `014`) |
 | `is_active` | BOOLEAN NOT NULL DEFAULT true | soft delete |
 | `created_at` | TIMESTAMPTZ DEFAULT NOW() | |
 | `updated_at` | TIMESTAMPTZ DEFAULT NOW() | trigger |
@@ -58,9 +59,9 @@ Lotes comprados do fornecedor. Cada lote é uma unidade de estoque e de custo.
 | `data` | DATE NOT NULL | data da compra |
 | `qtd` | INT NOT NULL | total comprado (alertar se < 20 — ver business-rules) |
 | `qtd_disp` | INT NOT NULL | disponível; decrementa a cada pedido vinculado |
-| `custo_total` | NUMERIC(10,2) NOT NULL | valor pago no lote |
+| `custo_total` | NUMERIC(10,2) NOT NULL | valor pago no lote; `0` = estoque em mãos (só expedição — fora de `v_lucro_por_lote`) |
 | `custo_unit` | NUMERIC(10,2) NOT NULL | `custo_total / qtd` (calculado na aplicação) |
-| `pagamento` | TEXT NOT NULL DEFAULT 'pendente' | `pendente` · `parcial` · `pago` |
+| `pagamento` | TEXT NOT NULL DEFAULT 'pendente' | `pendente` · `parcial` · `pago` · `sem_pagamento` |
 | `chegada` | DATE NULL | previsão/efetiva de chegada |
 | `referencia` | TEXT NULL | ex.: "Lote #001" |
 | `is_active` | BOOLEAN NOT NULL DEFAULT true | soft delete |
@@ -84,7 +85,7 @@ Vendas. Cada pedido é uma venda a um cliente, opcionalmente abatida de um lote.
 | `dose` | TEXT NULL | opcional |
 | `qtd` | INT NOT NULL DEFAULT 1 | unidades (produto único de 4ml) |
 | `valor` | NUMERIC(10,2) NOT NULL | receita do pedido |
-| `pagamento` | TEXT NOT NULL DEFAULT 'pendente' | `pendente` · `parcial` · `pago` |
+| `pagamento` | TEXT NOT NULL DEFAULT 'pendente' | `pendente` · `parcial` · `pago` · `bonificado` |
 | `entrega` | TEXT NOT NULL DEFAULT 'aguardando' | `aguardando` · `separado` · `entregue` |
 | `is_active` | BOOLEAN NOT NULL DEFAULT true | soft delete |
 | `created_at` | TIMESTAMPTZ DEFAULT NOW() | |
@@ -99,8 +100,8 @@ Notas:
 
 | Campo | Valores |
 |---|---|
-| `compras.pagamento` | `pendente`, `parcial`, `pago` |
-| `pedidos.pagamento` | `pendente`, `parcial`, `pago` |
+| `compras.pagamento` | `pendente`, `parcial`, `pago`, `sem_pagamento` (estoque em mãos, sem dívida) |
+| `pedidos.pagamento` | `pendente`, `parcial`, `pago`, `bonificado` (brinde — valor 0, baixa estoque, sem receita) |
 | `pedidos.entrega` | `aguardando`, `separado`, `entregue` |
 
 > Mantidos como TEXT (não `CHECK`/`ENUM` no MVP) para flexibilidade; a aplicação restringe ao conjunto acima. Se virar fonte de bug, promover para `CHECK` numa migration `002`.
