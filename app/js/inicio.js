@@ -44,15 +44,54 @@ async function agendarFollowup(clienteId, data, mensagem) {
   return insert('followups', { cliente_id: clienteId, data, mensagem });
 }
 
+// Amanhã é o default: dá a folga de 1 dia entre agendar e o cron das 9h
+// (evita agendar sem querer pra hoje e perder o envio do dia).
+function amanhaISO() {
+  const d = hojeLocal();
+  d.setDate(d.getDate() + 1);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 // Modal preenchido/aberto pelo arrasto; submit é ligado uma vez no init.
 let followupOnSave = null;
+let followupCliente = null; // pro botão "reescrever com IA" saber o nome
 function abrirModalFollowup(cliente, onSave) {
   document.getElementById('followup-cliente').value = cliente.id;
-  document.getElementById('followup-data').value = hojeISO();
+  document.getElementById('followup-data').value = amanhaISO();
   document.getElementById('followup-mensagem').value =
     `Oi ${cliente.nome}! Passando pra ver se você já vai querer repor o Mounjaro. 😊`;
   followupOnSave = onSave || null;
+  followupCliente = cliente;
   openModal('modal-followup');
+}
+
+async function reescreverComIA() {
+  const campo = document.getElementById('followup-mensagem');
+  const rascunho = campo.value.trim();
+  if (!rascunho) return;
+  const btn = document.getElementById('btn-ia-followup');
+  const rotuloOriginal = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '✨ Gerando...';
+  try {
+    const { data, error } = await db.rpc('reescrever_mensagem_ia', {
+      p_rascunho: rascunho, p_cliente_nome: followupCliente?.nome || '',
+    });
+    if (error) throw new Error(error.message);
+    campo.value = data;
+  } catch (err) {
+    const msgs = {
+      ia_nao_configurada: 'IA ainda não configurada (monjaro.config: ai_chat_url/ai_chat_token/ai_model).',
+      ia_timeout: 'A IA demorou demais pra responder. Tenta de novo.',
+    };
+    toast(msgs[err.message] || (err.message?.startsWith('ia_erro_http')
+      ? 'A API de IA respondeu com erro. Tenta de novo.'
+      : 'Não consegui gerar com a IA. Tenta de novo.'));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = rotuloOriginal;
+  }
 }
 
 // Retomadas do ciclo atual: cada volta ao Follow-up insere uma linha em
@@ -476,6 +515,8 @@ let retomadasAtual = new Map(); // ×N de voltas ao follow-up no ciclo
 
 export function initInicio() {
   const funilEl = document.getElementById('funil');
+
+  document.getElementById('btn-ia-followup').addEventListener('click', reescreverComIA);
 
   submitOnce(document.getElementById('form-followup'), async () => {
     try {
