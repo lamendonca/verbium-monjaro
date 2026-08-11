@@ -66,6 +66,13 @@ function abrirModalFollowup(cliente, onSave) {
   openModal('modal-followup');
 }
 
+const pausa = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// anon tem statement_timeout=3s (guarda do Supabase) — uma função só,
+// bloqueada esperando a LLM responder, sempre estoura esse limite. Por
+// isso são duas chamadas rápidas: inicia (retorna na hora) e o client
+// consulta a cada 1s até vir o texto — cada consulta é curta o bastante
+// pra nunca bater no limite.
 async function reescreverComIA() {
   const campo = document.getElementById('followup-mensagem');
   const rascunho = campo.value.trim();
@@ -75,14 +82,24 @@ async function reescreverComIA() {
   btn.disabled = true;
   btn.textContent = '✨ Gerando...';
   try {
-    const { data, error } = await db.rpc('reescrever_mensagem_ia', {
+    const { data: reqId, error: erroInicio } = await db.rpc('iniciar_reescrita_ia', {
       p_rascunho: rascunho, p_cliente_nome: followupCliente?.nome || '',
     });
-    if (error) throw new Error(error.message);
-    campo.value = data;
+    if (erroInicio) throw new Error(erroInicio.message);
+
+    let texto = null;
+    for (let tentativa = 0; tentativa < 20 && texto == null; tentativa++) {
+      await pausa(1000);
+      const { data, error } = await db.rpc('checar_resposta_ia', { p_request_id: reqId });
+      if (error) throw new Error(error.message);
+      texto = data;
+    }
+    if (texto == null) throw new Error('ia_timeout');
+    campo.value = texto;
   } catch (err) {
     const msgs = {
       ia_nao_configurada: 'IA ainda não configurada (monjaro.config: ai_chat_url/ai_chat_token/ai_model).',
+      ia_sem_rascunho: 'Escreve um rascunho antes de reescrever.',
       ia_timeout: 'A IA demorou demais pra responder. Tenta de novo.',
     };
     toast(msgs[err.message] || (err.message?.startsWith('ia_erro_http')

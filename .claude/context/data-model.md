@@ -115,10 +115,12 @@ Notas:
 - Entra no lucro por cliente (incorporado ao número exibido) e no consolidado do Financeiro: `lucro_total += Σreceita − Σdespesa` (ver `business-rules.md` §4).
 - Não afeta `investido`/`recebido`/`a_receber` do consolidado — esses são conceitos específicos de lote/pedido.
 
-### IA no follow-up (migration `019`)
-Sem coluna nova em `followups` — a reescrita por IA é **síncrona sob demanda** (botão no modal, não automação em background; ver `business-rules.md` §6). `monjaro.config` ganhou as chaves `ai_chat_url`, `ai_chat_token`, `ai_model` (mesmo padrão RLS-deny das credenciais Evolution). Função `monjaro.reescrever_mensagem_ia(rascunho, nome_cliente)` é a única, entre as funções de IA/envio, com `EXECUTE` liberado pro `anon` — é chamada direto pelo client via RPC.
+### IA no follow-up (migrations `019`/`022`)
+Sem coluna nova em `followups` — a reescrita por IA é **sob demanda** (botão no modal, não automação em background; ver `business-rules.md` §6). `monjaro.config` ganhou as chaves `ai_chat_url`, `ai_chat_token`, `ai_model` (mesmo padrão RLS-deny das credenciais Evolution). Duas funções com `EXECUTE` liberado pro `anon` (únicas nesse caso — as demais de IA/envio são internas):
+- `monjaro.iniciar_reescrita_ia(rascunho, nome_cliente) RETURNS BIGINT` — dispara o `pg_net` e devolve o `request_id` na hora.
+- `monjaro.checar_resposta_ia(request_id) RETURNS TEXT` — leitura rápida de `net._http_response`; `NULL` = ainda não chegou.
 
-> Histórico: a migration `018` criou um fluxo assíncrono (trigger + cron de polling + colunas `ia_request_id`/`mensagem_ia`) que a `019` removeu por não atender o requisito real (reescrita sob demanda, não automática).
+> Histórico: a `018` criou um fluxo assíncrono em background (trigger + cron + colunas `ia_request_id`/`mensagem_ia`) removido pela `019` por não ser o requisito real (botão sob demanda). A primeira versão da `019` ainda tentava ser uma função síncrona única — esbarrou no `statement_timeout=3s` do role `anon` (guarda do Supabase; `SET LOCAL` dentro da função não adianta, o prazo já está fixado no início do statement). A `022` corrigiu pra duas chamadas RPC curtas com polling do lado do client.
 
 ## Domínios de valores (enums por convenção, validados na aplicação)
 
