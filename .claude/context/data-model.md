@@ -115,15 +115,10 @@ Notas:
 - Entra no lucro por cliente (incorporado ao número exibido) e no consolidado do Financeiro: `lucro_total += Σreceita − Σdespesa` (ver `business-rules.md` §4).
 - Não afeta `investido`/`recebido`/`a_receber` do consolidado — esses são conceitos específicos de lote/pedido.
 
-### `monjaro.followups` (colunas de IA — migration `018`)
-Tabela criada na `007` (não documentada aqui até agora). Colunas novas, ligadas à geração de mensagem por IA (`business-rules.md` §6):
+### IA no follow-up (migration `019`)
+Sem coluna nova em `followups` — a reescrita por IA é **síncrona sob demanda** (botão no modal, não automação em background; ver `business-rules.md` §6). `monjaro.config` ganhou as chaves `ai_chat_url`, `ai_chat_token`, `ai_model` (mesmo padrão RLS-deny das credenciais Evolution). Função `monjaro.reescrever_mensagem_ia(rascunho, nome_cliente)` é a única, entre as funções de IA/envio, com `EXECUTE` liberado pro `anon` — é chamada direto pelo client via RPC.
 
-| Coluna | Tipo | Observação |
-|---|---|---|
-| `ia_request_id` | BIGINT NULL | id da chamada assíncrona ao `pg_net` pra API de IA (não é o `request_id` do envio Evolution) |
-| `mensagem_ia` | TEXT NULL | texto gerado pela IA, se a resposta chegou a tempo; `NULL` = segue com `mensagem` (fallback) |
-
-`monjaro.config` ganhou as chaves `ai_chat_url`, `ai_chat_token`, `ai_model` (mesmo padrão RLS-deny das credenciais Evolution — ver `017_config_ia.sql`).
+> Histórico: a migration `018` criou um fluxo assíncrono (trigger + cron de polling + colunas `ia_request_id`/`mensagem_ia`) que a `019` removeu por não atender o requisito real (reescrita sob demanda, não automática).
 
 ## Domínios de valores (enums por convenção, validados na aplicação)
 
