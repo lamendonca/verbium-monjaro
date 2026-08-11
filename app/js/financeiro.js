@@ -7,6 +7,7 @@ import {
   openModal, closeModal, toast, submitOnce, onClickOnce, confirmar, parseDecimal,
 } from './ui.js';
 import { listarClientes } from './clientes.js';
+import { graficoTendencia } from './chart.js';
 
 export const lucroPorLote = () => listView('v_lucro_por_lote');
 
@@ -96,6 +97,31 @@ export async function consolidado() {
       .reduce((s, p) => s + Number(p.valor), 0),
     lucro_total: viewLotes.reduce((s, l) => s + Number(l.lucro), 0) + avulsos,
   };
+}
+
+// ---- Dashboard: tendência mensal + KPIs avançados ----
+export async function tendenciaMensal() {
+  const data = await listView('v_financeiro_mensal');
+  return data.map((m) => ({
+    mes: m.mes, receita: Number(m.receita), custo: Number(m.custo),
+    lucro: Number(m.receita) - Number(m.custo), pedidos_pagos: m.pedidos_pagos,
+  }));
+}
+
+// Ticket médio e margem usam o histórico completo (mesma base do consolidado);
+// variação compara os 2 últimos meses com dado (não necessariamente o mês
+// corrente — se ainda não há venda este mês, compara os últimos que existem).
+export async function kpisAvancados() {
+  const [cons, mensal] = await Promise.all([consolidado(), tendenciaMensal()]);
+  const totalPedidosPagos = mensal.reduce((s, m) => s + Number(m.pedidos_pagos), 0);
+  const ticketMedio = totalPedidosPagos ? cons.recebido / totalPedidosPagos : 0;
+  const margem = cons.recebido ? (cons.lucro_total / cons.recebido) * 100 : 0;
+  let variacao = null;
+  if (mensal.length >= 2) {
+    const [atual, anterior] = mensal.slice(-2).reverse();
+    variacao = anterior.lucro !== 0 ? ((atual.lucro - anterior.lucro) / Math.abs(anterior.lucro)) * 100 : null;
+  }
+  return { ticketMedio, margem, variacao };
 }
 
 // ---- Indicações do mês (business-rules.md §4) ----
@@ -289,14 +315,18 @@ export function initFinanceiro() {
   }
   mesIndicacoes.addEventListener('change', renderIndicacoes);
 
+  const graficoContainer = document.getElementById('fin-grafico-tendencia');
+
   async function refresh() {
     loadingState(listaLotes);
     loadingState(listaClientes);
     loadingState(listaLancamentos);
+    loadingState(graficoContainer);
     renderIndicacoes();
     try {
-      const [cons, lotes, clientes, lancamentos] = await Promise.all([
+      const [cons, lotes, clientes, lancamentos, kpis, mensal] = await Promise.all([
         consolidado(), lucroPorLote(), lucroPorClienteComAvulsos(), listarLancamentos(),
+        kpisAvancados(), tendenciaMensal(),
       ]);
       document.getElementById('fin-investido').textContent = fmtMoney(cons.investido);
       document.getElementById('fin-recebido').textContent = fmtMoney(cons.recebido);
@@ -304,6 +334,20 @@ export function initFinanceiro() {
       const lucroEl = document.getElementById('fin-lucro');
       lucroEl.textContent = fmtMoney(cons.lucro_total);
       lucroEl.style = corLucro(cons.lucro_total);
+
+      document.getElementById('fin-ticket-medio').textContent = fmtMoney(kpis.ticketMedio);
+      document.getElementById('fin-margem').textContent = `${kpis.margem.toFixed(1)}%`;
+      const variacaoEl = document.getElementById('fin-variacao');
+      if (kpis.variacao == null) {
+        variacaoEl.textContent = '—';
+        variacaoEl.className = 'value';
+      } else {
+        const seta = kpis.variacao >= 0 ? '↑' : '↓';
+        variacaoEl.textContent = `${seta} ${Math.abs(kpis.variacao).toFixed(1)}%`;
+        variacaoEl.className = `value kpi-delta ${kpis.variacao >= 0 ? 'up' : 'down'}`;
+      }
+
+      renderInto(graficoContainer, graficoTendencia(mensal.slice(-12)));
 
       if (lotes.length) renderInto(listaLotes, lotes.map(cardLote));
       else emptyState(listaLotes, '📦', 'Nenhum lote ainda.');
@@ -315,6 +359,7 @@ export function initFinanceiro() {
       errorState(listaLotes);
       errorState(listaClientes);
       errorState(listaLancamentos);
+      errorState(graficoContainer);
     }
   }
 

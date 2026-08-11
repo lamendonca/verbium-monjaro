@@ -105,6 +105,18 @@ lucro_total  = Σ lucro_lote (v_lucro_por_lote) + Σ lancamentos.receita - Σ la
 
 > "Recebido parcial": no MVP, `parcial` conta como **a receber** (não temos coluna de valor pago parcial). Se o operador precisar do valor exato pago, adicionar `valor_pago` numa migration futura — não inventar agora.
 
+### Dashboard (KPIs avançados e tendência, migration `016`)
+```
+ticket_medio = recebido / total de pedidos pagos (histórico completo)
+margem       = lucro_total / recebido * 100
+variacao     = (lucro_mes_atual - lucro_mes_anterior) / |lucro_mes_anterior| * 100
+               -- compara os 2 últimos meses com dado em v_financeiro_mensal,
+                  não necessariamente o mês corrente do calendário
+```
+Fonte da tendência mensal: view `monjaro.v_financeiro_mensal` (receita/custo por mês, mesma regra de `v_lucro_por_lote`). Gráfico renderizado em SVG nativo (`app/js/chart.js`, sem dependência externa) — barras de receita + linha de lucro.
+
+> **Taxa de conversão do funil**: não existe histórico de transição de fase (o funil é derivado do estado atual, §6) — qualquer "taxa de conversão" no dashboard é uma aproximação por estado atual (ex.: clientes com pedido pago / total), não uma conversão real por período. Uma métrica real exigiria uma tabela de eventos de fase — feature futura, não assumir dado que não existe.
+
 ### Indicações e bonificação
 
 - `clientes.indicado_por` (migration `014`, FK auto-referente) marca quem trouxe o cliente. A cadeia multinível (A→B→C) é derivada da própria FK — sem estrutura extra.

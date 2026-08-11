@@ -150,6 +150,20 @@ LEFT JOIN monjaro.pedidos p
 WHERE c.is_active
 GROUP BY c.id;
 
+-- Tendência mensal (dashboard do Financeiro): receita e custo agrupados
+-- por mês do pedido, mesma regra de v_lucro_por_lote (só pedido pago,
+-- custo rateado por qtd * custo_unit do lote vinculado). Migration 016.
+CREATE OR REPLACE VIEW monjaro.v_financeiro_mensal AS
+SELECT date_trunc('month', p.data)::date AS mes,
+       COALESCE(SUM(p.valor) FILTER (WHERE p.pagamento = 'pago'), 0) AS receita,
+       COALESCE(SUM(p.qtd * cp.custo_unit) FILTER (WHERE p.pagamento = 'pago'), 0) AS custo,
+       COUNT(*) FILTER (WHERE p.pagamento = 'pago') AS pedidos_pagos
+FROM monjaro.pedidos p
+LEFT JOIN monjaro.compras cp ON cp.id = p.compra_id
+WHERE p.is_active
+GROUP BY 1
+ORDER BY 1;
+
 -- Recompra por cliente: frequência EFETIVA (média dos intervalos entre
 -- datas distintas de pedidos quando >= 2 compras; senão a estimativa
 -- manual) + próxima recompra. Redefinida na migration 004 — ver

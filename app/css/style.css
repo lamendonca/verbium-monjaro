@@ -144,6 +144,16 @@ body {
 .summary-card .label { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
 .summary-card .value { font-size: 22px; font-weight: 700; }
 
+/* ============ Gráfico de tendência (chart.js) ============ */
+.chart-wrap svg { display: block; width: 100%; height: auto; }
+.chart-legenda {
+  display: flex; gap: 16px; margin-top: 8px; font-size: 11px; color: var(--text-muted);
+}
+.chart-legenda span { display: inline-flex; align-items: center; gap: 5px; }
+.chart-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; }
+.kpi-delta.up   { color: var(--success); }
+.kpi-delta.down { color: var(--danger); }
+
 /* ============ Badges ============ */
 .badge {
   display: inline-block;
