@@ -81,24 +81,41 @@ lucro_lote   = receita_lote - compras.custo_total
 Fonte pronta: view `monjaro.v_lucro_por_lote` (migration `013`). Pendente/parcial ainda **não é receita** (aparece só no "a receber"); bonificado nunca é. Lotes com `custo_total = 0` (estoque em mãos, "sem pagamento") ficam **fora da view** — são só expedição e inflariam o lucro. Lucro de lote ainda não esgotado é parcial (parte do estoque não virou receita) — exibir junto `qtd_disp/qtd` para dar contexto.
 
 ### Lucro por cliente
-Receita recebida do cliente menos o custo estimado das unidades que ele comprou, via custo unitário do lote de cada pedido:
+Receita recebida do cliente menos o custo estimado das unidades que ele comprou, via custo unitário do lote de cada pedido, **incorporando os lançamentos avulsos** do cliente (abaixo):
 ```
 receita_cliente = Σ pedidos.valor          (do cliente, pedidos ativos)
 custo_cliente   = Σ (pedido.qtd * custo_unit_do_lote_vinculado)
                   -- pedidos sem compra_id: custo desconhecido → tratar como 0
                      e sinalizar "custo não rastreado" na UI
-lucro_cliente   = receita_cliente - custo_cliente
+avulso_cliente  = Σ lancamentos.valor WHERE tipo='receita' - Σ lancamentos.valor WHERE tipo='despesa'
+lucro_cliente   = receita_cliente - custo_cliente + avulso_cliente
 ```
+Cliente sem nenhum pedido, mas com lançamento avulso, ainda aparece na lista (lucro = só o avulso).
+
+### Lançamentos avulsos
+Despesa ou receita solta ligada a um cliente, fora do fluxo de pedido/lote (ex.: reembolso, taxa extra) — tabela `monjaro.lancamentos` (migration `015`). Cadastrada na tela Financeiro, sempre com um cliente vinculado. O sinal vem do `tipo` (`receita`/`despesa`); `valor` é sempre positivo no banco. Entra no lucro por cliente (acima) e no consolidado (abaixo) — não afeta `investido`/`recebido`/`a_receber`, que são conceitos específicos de lote/pedido.
 
 ### Consolidado (tela Financeiro / KPIs do Início)
 ```
 investido    = Σ compras.custo_total            (lotes ativos)
 recebido     = Σ pedidos.valor WHERE pagamento='pago'
 a_receber    = Σ pedidos.valor WHERE pagamento IN ('pendente','parcial')   -- bonificado fora
-lucro_total  = Σ lucro_lote                     (v_lucro_por_lote)
+lucro_total  = Σ lucro_lote (v_lucro_por_lote) + Σ lancamentos.receita - Σ lancamentos.despesa
 ```
 
 > "Recebido parcial": no MVP, `parcial` conta como **a receber** (não temos coluna de valor pago parcial). Se o operador precisar do valor exato pago, adicionar `valor_pago` numa migration futura — não inventar agora.
+
+### Dashboard (KPIs avançados e tendência, migration `016`)
+```
+ticket_medio = recebido / total de pedidos pagos (histórico completo)
+margem       = lucro_total / recebido * 100
+variacao     = (lucro_mes_atual - lucro_mes_anterior) / |lucro_mes_anterior| * 100
+               -- compara os 2 últimos meses com dado em v_financeiro_mensal,
+                  não necessariamente o mês corrente do calendário
+```
+Fonte da tendência mensal: view `monjaro.v_financeiro_mensal` (receita/custo por mês, mesma regra de `v_lucro_por_lote`). Gráfico renderizado em SVG nativo (`app/js/chart.js`, sem dependência externa) — barras de receita + linha de lucro.
+
+> **Taxa de conversão do funil**: não existe histórico de transição de fase (o funil é derivado do estado atual, §6) — qualquer "taxa de conversão" no dashboard é uma aproximação por estado atual (ex.: clientes com pedido pago / total), não uma conversão real por período. Uma métrica real exigiria uma tabela de eventos de fase — feature futura, não assumir dado que não existe.
 
 ### Indicações e bonificação
 
@@ -145,6 +162,12 @@ Fases **derivadas** dos dados — nenhum estado extra persistido. Por cliente at
 > `negociacao_em` é **limpo** ao criar pedido novo (junto com `perdido_em`) e ao mover um card pra fase de pedido — sem isso, retomada e venda no MESMO dia (`negociacao_em >= data`) devolveriam o card concluído pra "Não iniciada".
 
 **Follow-up** (tabela `followups`, migration `007`): mover um card pra cá abre modal de **data + mensagem**. Um job `pg_cron` (`monjaro_followups`, diário às 12:00 UTC ≈ 9h Brasília) chama `monjaro.enviar_followups()`, que envia as mensagens vencidas via **Evolution API** (`pg_net` → `POST /message/sendText/{instance}`) e marca `enviado_em`. Credenciais em `monjaro.config` (`evolution_url`, `evolution_instance`, `evolution_apikey`) — RLS deny, anon não lê. Um followup pendente por cliente; sair da coluna cancela (`is_active=false`); após enviado, o card volta à derivação normal.
+
+**Mensagem gerada por IA** (migration `018`), pra não repetir sempre o mesmo texto:
+- Ao agendar (INSERT em `followups`), um trigger chama `monjaro.gerar_mensagem_ia()`, que dispara (via `pg_net`) uma chamada assíncrona a uma API de chat completions interna, usando **o rascunho digitado pelo operador como contexto/instrução** do prompt (não é descartado). Guarda o `ia_request_id` da chamada.
+- `pg_net` é assíncrono — a resposta não existe no mesmo statement. Um cron separado (`monjaro_ia_coleta`, a cada 10min) chama `monjaro.coletar_respostas_ia()`, que lê `net._http_response` pelo `ia_request_id` e grava o texto em `followups.mensagem_ia` quando a resposta chega (janela de tolerância: 2 dias).
+- `enviar_followups()` usa `COALESCE(mensagem_ia, mensagem)` — **fallback obrigatório**: se a IA não respondeu a tempo, falhou, ou as credenciais (`monjaro.config`: `ai_chat_url`, `ai_chat_token`, `ai_model`) não estão configuradas, sai o template original. Nunca mensagem vazia, nunca falha silenciosa de envio.
+- 100% dentro do Postgres (mesmo padrão de `pg_net`/`pg_cron` do envio Evolution) — sem infra nova (sem Edge Function).
 
 - Retomada pro funil é automática via alerta de recompra (§1); inclusão manual acontece ao cadastrar o cliente (entra sem pedido → Não iniciada).
 - "Não iniciada" ordena por urgência: atrasados → novos → alertas. "Entregue" ordena do mais recente.

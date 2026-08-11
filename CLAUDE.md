@@ -158,6 +158,9 @@ Perguntar **uma vez** com as opções mapeadas — não implementar suposição.
 - [x] Indicações multinível: `indicado_por` (migration `014`), badge/filtro, cadeia no detalhe, seção "Indicações do mês" no Financeiro
 - [x] Pedido bonificado (`pagamento='bonificado'`, valor 0 travado) e lote sem pagamento (custo opcional)
 - [x] Funil: coluna Follow-up agrupada por data + badge ×N de retomadas + badge de frequência; lista de alertas do Início removida
+- [x] Lançamentos avulsos (despesa/receita por cliente), incorporados ao lucro por cliente e ao consolidado (migration `015`)
+- [x] Dashboard Financeiro: ticket médio, margem %, variação vs. mês anterior, gráfico de tendência mensal em SVG nativo (`app/js/chart.js`, migration `016`)
+- [x] Follow-up com mensagem gerada por IA (trigger + polling `pg_net`/`pg_cron`, fallback pro template original) — migrations `017`/`018`; aguarda o Lucas preencher `monjaro.config.ai_chat_url/ai_chat_token/ai_model` pra ativar
 
 > Estrutura: além dos módulos spec'ados existem `app/js/ui.js` (helpers de
 > apresentação compartilhados) e `app/js/inicio.js` (dashboard — compõe

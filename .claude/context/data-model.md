@@ -96,6 +96,35 @@ Notas:
 - `data` + `cliente.frequencia` define a próxima data de recompra esperada (base do alerta de Início).
 - Status de pagamento/entrega são strings controladas — validar no front contra a lista permitida.
 
+### `monjaro.lancamentos`
+Despesa ou receita avulsa ligada a um cliente, fora do fluxo de pedido/lote (ex.: reembolso, taxa extra). Migration `015`.
+
+| Coluna | Tipo | Observação |
+|---|---|---|
+| `id` | UUID PK | |
+| `cliente_id` | UUID NOT NULL FK → clientes(id) | sempre ligado a um cliente, sem lançamento "geral" |
+| `tipo` | TEXT NOT NULL | `receita` · `despesa` (CHECK) |
+| `valor` | NUMERIC(10,2) NOT NULL | sempre positivo (CHECK `> 0`) — o sinal vem do `tipo` |
+| `descricao` | TEXT NULL | detalhe livre do lançamento |
+| `data` | DATE NOT NULL DEFAULT CURRENT_DATE | |
+| `is_active` | BOOLEAN NOT NULL DEFAULT true | soft delete |
+| `created_at` | TIMESTAMPTZ DEFAULT NOW() | |
+| `updated_at` | TIMESTAMPTZ DEFAULT NOW() | trigger |
+
+Notas:
+- Entra no lucro por cliente (incorporado ao número exibido) e no consolidado do Financeiro: `lucro_total += Σreceita − Σdespesa` (ver `business-rules.md` §4).
+- Não afeta `investido`/`recebido`/`a_receber` do consolidado — esses são conceitos específicos de lote/pedido.
+
+### `monjaro.followups` (colunas de IA — migration `018`)
+Tabela criada na `007` (não documentada aqui até agora). Colunas novas, ligadas à geração de mensagem por IA (`business-rules.md` §6):
+
+| Coluna | Tipo | Observação |
+|---|---|---|
+| `ia_request_id` | BIGINT NULL | id da chamada assíncrona ao `pg_net` pra API de IA (não é o `request_id` do envio Evolution) |
+| `mensagem_ia` | TEXT NULL | texto gerado pela IA, se a resposta chegou a tempo; `NULL` = segue com `mensagem` (fallback) |
+
+`monjaro.config` ganhou as chaves `ai_chat_url`, `ai_chat_token`, `ai_model` (mesmo padrão RLS-deny das credenciais Evolution — ver `017_config_ia.sql`).
+
 ## Domínios de valores (enums por convenção, validados na aplicação)
 
 | Campo | Valores |
@@ -130,6 +159,20 @@ LEFT JOIN monjaro.pedidos p
        ON p.compra_id = c.id AND p.is_active
 WHERE c.is_active
 GROUP BY c.id;
+
+-- Tendência mensal (dashboard do Financeiro): receita e custo agrupados
+-- por mês do pedido, mesma regra de v_lucro_por_lote (só pedido pago,
+-- custo rateado por qtd * custo_unit do lote vinculado). Migration 016.
+CREATE OR REPLACE VIEW monjaro.v_financeiro_mensal AS
+SELECT date_trunc('month', p.data)::date AS mes,
+       COALESCE(SUM(p.valor) FILTER (WHERE p.pagamento = 'pago'), 0) AS receita,
+       COALESCE(SUM(p.qtd * cp.custo_unit) FILTER (WHERE p.pagamento = 'pago'), 0) AS custo,
+       COUNT(*) FILTER (WHERE p.pagamento = 'pago') AS pedidos_pagos
+FROM monjaro.pedidos p
+LEFT JOIN monjaro.compras cp ON cp.id = p.compra_id
+WHERE p.is_active
+GROUP BY 1
+ORDER BY 1;
 
 -- Recompra por cliente: frequência EFETIVA (média dos intervalos entre
 -- datas distintas de pedidos quando >= 2 compras; senão a estimativa

@@ -1,10 +1,13 @@
 // financeiro.js — lucro por lote, por cliente e consolidado.
 // Fórmulas em business-rules.md §4. 'parcial' conta como a receber no MVP.
 
-import { db, list, listView } from './db.js';
+import { db, list, insert, update, softDelete, listView } from './db.js';
 import {
-  el, renderInto, loadingState, emptyState, errorState, fmtMoney, hojeISO,
+  el, renderInto, loadingState, emptyState, errorState, fmtMoney, fmtData, hojeISO,
+  openModal, closeModal, toast, submitOnce, onClickOnce, confirmar, parseDecimal,
 } from './ui.js';
+import { listarClientes } from './clientes.js';
+import { graficoTendencia } from './chart.js';
 
 export const lucroPorLote = () => listView('v_lucro_por_lote');
 
@@ -16,7 +19,7 @@ export async function lucroPorCliente() {
   const porCliente = new Map();
   for (const p of data) {
     const c = porCliente.get(p.cliente_id) ||
-      { nome: p.cliente?.nome || '—', receita: 0, custo: 0, pedidos: 0, naoRastreado: false };
+      { id: p.cliente_id, nome: p.cliente?.nome || '—', receita: 0, custo: 0, pedidos: 0, naoRastreado: false };
     c.receita += Number(p.valor);
     c.pedidos += 1;
     if (p.compra_id && p.lote) c.custo += p.qtd * Number(p.lote.custo_unit);
@@ -28,21 +31,97 @@ export async function lucroPorCliente() {
     .sort((a, b) => b.lucro - a.lucro);
 }
 
+// ---- Lançamentos avulsos (despesa/receita solta ligada a um cliente) ----
+export const listarLancamentos = () => list('lancamentos', {
+  order: 'data', ascending: false, select: '*, cliente:cliente_id(nome)',
+});
+
+export async function salvarLancamento(lancamento) {
+  const { id, ...resto } = lancamento;
+  return id ? update('lancamentos', id, resto) : insert('lancamentos', resto);
+}
+
+// Map<cliente_id, {nome, receita, despesa}> — só ativos. Usado pra incorporar
+// o avulso ao lucro exibido em cardCliente sem misturar as duas fontes de
+// dado (pedidos x lancamentos) dentro de lucroPorCliente().
+export async function lancamentosPorCliente() {
+  const { data, error } = await db.from('lancamentos')
+    .select('cliente_id, tipo, valor, cliente:cliente_id(nome)').eq('is_active', true);
+  if (error) throw new Error(error.message);
+  const porCliente = new Map();
+  for (const l of data) {
+    const c = porCliente.get(l.cliente_id) || { nome: l.cliente?.nome || '—', receita: 0, despesa: 0 };
+    c[l.tipo] += Number(l.valor);
+    porCliente.set(l.cliente_id, c);
+  }
+  return porCliente;
+}
+
+// Mescla lucroPorCliente() (base) com lancamentosPorCliente() (avulsos) num
+// único número de lucro por cliente — inclui clientes que só têm avulso,
+// sem pedido nenhum. Fica na camada de tela pra não misturar as duas fontes
+// de dado dentro das funções de agregação.
+export async function lucroPorClienteComAvulsos() {
+  const [base, avulsos] = await Promise.all([lucroPorCliente(), lancamentosPorCliente()]);
+  const restantes = new Map(avulsos);
+  const combinado = base.map((c) => {
+    const a = restantes.get(c.id);
+    restantes.delete(c.id);
+    if (!a) return c;
+    return { ...c, avulso: a.receita - a.despesa, lucro: c.lucro + a.receita - a.despesa };
+  });
+  for (const [id, a] of restantes) {
+    combinado.push({
+      id, nome: a.nome, receita: 0, custo: 0, pedidos: 0, naoRastreado: false,
+      avulso: a.receita - a.despesa, lucro: a.receita - a.despesa,
+    });
+  }
+  return combinado.sort((x, y) => y.lucro - x.lucro);
+}
+
 export async function consolidado() {
-  const [lotes, viewLotes, { data: pedidos, error }] = await Promise.all([
+  const [lotes, viewLotes, { data: pedidos, error }, lancamentos] = await Promise.all([
     list('compras', { select: 'custo_total' }),
     lucroPorLote(),
     db.from('pedidos').select('valor, pagamento').eq('is_active', true),
+    list('lancamentos', { select: 'tipo, valor' }),
   ]);
   if (error) throw new Error(error.message);
+  const avulsos = lancamentos.reduce(
+    (s, l) => s + (l.tipo === 'receita' ? Number(l.valor) : -Number(l.valor)), 0);
   return {
     investido: lotes.reduce((s, l) => s + Number(l.custo_total), 0),
     recebido: pedidos.filter((p) => p.pagamento === 'pago').reduce((s, p) => s + Number(p.valor), 0),
     // bonificado é brinde — não é dinheiro a entrar
     a_receber: pedidos.filter((p) => p.pagamento === 'pendente' || p.pagamento === 'parcial')
       .reduce((s, p) => s + Number(p.valor), 0),
-    lucro_total: viewLotes.reduce((s, l) => s + Number(l.lucro), 0),
+    lucro_total: viewLotes.reduce((s, l) => s + Number(l.lucro), 0) + avulsos,
   };
+}
+
+// ---- Dashboard: tendência mensal + KPIs avançados ----
+export async function tendenciaMensal() {
+  const data = await listView('v_financeiro_mensal');
+  return data.map((m) => ({
+    mes: m.mes, receita: Number(m.receita), custo: Number(m.custo),
+    lucro: Number(m.receita) - Number(m.custo), pedidos_pagos: m.pedidos_pagos,
+  }));
+}
+
+// Ticket médio e margem usam o histórico completo (mesma base do consolidado);
+// variação compara os 2 últimos meses com dado (não necessariamente o mês
+// corrente — se ainda não há venda este mês, compara os últimos que existem).
+export async function kpisAvancados() {
+  const [cons, mensal] = await Promise.all([consolidado(), tendenciaMensal()]);
+  const totalPedidosPagos = mensal.reduce((s, m) => s + Number(m.pedidos_pagos), 0);
+  const ticketMedio = totalPedidosPagos ? cons.recebido / totalPedidosPagos : 0;
+  const margem = cons.recebido ? (cons.lucro_total / cons.recebido) * 100 : 0;
+  let variacao = null;
+  if (mensal.length >= 2) {
+    const [atual, anterior] = mensal.slice(-2).reverse();
+    variacao = anterior.lucro !== 0 ? ((atual.lucro - anterior.lucro) / Math.abs(anterior.lucro)) * 100 : null;
+  }
+  return { ticketMedio, margem, variacao };
 }
 
 // ---- Indicações do mês (business-rules.md §4) ----
@@ -133,19 +212,96 @@ function cardCliente(c) {
       el('div', { class: 'title' }, c.nome),
       el('div', { class: 'sub' },
         `${c.pedidos} pedido(s) · receita ${fmtMoney(c.receita)} · custo ${fmtMoney(c.custo)}`),
-      c.naoRastreado
-        ? el('div', { class: 'badges' }, el('span', { class: 'badge badge-gray' }, 'custo não rastreado'))
-        : null),
+      el('div', { class: 'badges' },
+        c.naoRastreado ? el('span', { class: 'badge badge-gray' }, 'custo não rastreado') : null,
+        c.avulso ? el('span', { class: 'badge badge-gray' }, `avulsos ${fmtMoney(c.avulso)}`) : null)),
     el('div', { class: 'actions' },
       el('div', { class: 'title', style: corLucro(c.lucro) }, fmtMoney(c.lucro))));
+}
+
+const badgeTipoLancamento = {
+  receita: ['badge-green', 'Receita'],
+  despesa: ['badge-red', 'Despesa'],
+};
+
+function cardLancamento(l, onEdit) {
+  const [cls, label] = badgeTipoLancamento[l.tipo];
+  const sinal = l.tipo === 'receita' ? 1 : -1;
+  return el('div', { class: 'list-item' },
+    el('div', { class: 'info' },
+      el('div', { class: 'title' }, l.cliente?.nome || '—'),
+      el('div', { class: 'sub' }, `${fmtData(l.data)}${l.descricao ? ` · ${l.descricao}` : ''}`),
+      el('div', { class: 'badges' }, el('span', { class: `badge ${cls}` }, label))),
+    el('div', { class: 'actions' },
+      el('div', { class: 'title', style: corLucro(sinal) }, fmtMoney(l.valor)),
+      el('button', { class: 'btn btn-outline btn-sm', onclick: () => onEdit(l) }, 'Editar')));
 }
 
 export function initFinanceiro() {
   const listaLotes = document.getElementById('lista-fin-lotes');
   const listaClientes = document.getElementById('lista-fin-clientes');
+  const listaLancamentos = document.getElementById('lista-fin-lancamentos');
   const listaIndicacoes = document.getElementById('lista-fin-indicacoes');
   const mesIndicacoes = document.getElementById('fin-mes-indicacoes');
   mesIndicacoes.value = hojeISO().slice(0, 7); // mês corrente
+
+  const form = document.getElementById('form-lancamento');
+  const campos = {
+    id: document.getElementById('lancamento-id'),
+    cliente: document.getElementById('lancamento-cliente'),
+    tipo: document.getElementById('lancamento-tipo'),
+    data: document.getElementById('lancamento-data'),
+    valor: document.getElementById('lancamento-valor'),
+    descricao: document.getElementById('lancamento-descricao'),
+  };
+  const btnRemover = document.getElementById('btn-remover-lancamento');
+
+  async function abrirModalLancamento(lancamento) {
+    form.reset();
+    const clientes = await listarClientes();
+    renderInto(campos.cliente, clientes.map((c) => el('option', { value: c.id }, c.nome)));
+    campos.id.value = lancamento?.id || '';
+    if (lancamento) campos.cliente.value = lancamento.cliente_id;
+    campos.tipo.value = lancamento?.tipo || 'despesa';
+    campos.data.value = lancamento?.data || hojeISO();
+    campos.valor.value = lancamento?.valor ?? '';
+    campos.descricao.value = lancamento?.descricao || '';
+    document.getElementById('modal-lancamento-titulo').textContent =
+      lancamento ? 'Editar lançamento' : 'Novo lançamento';
+    btnRemover.classList.toggle('hidden', !lancamento);
+    openModal('modal-lancamento');
+  }
+  document.getElementById('btn-novo-lancamento').addEventListener('click', () => abrirModalLancamento(null));
+
+  submitOnce(form, async () => {
+    try {
+      await salvarLancamento({
+        id: campos.id.value || undefined,
+        cliente_id: campos.cliente.value,
+        tipo: campos.tipo.value,
+        data: campos.data.value,
+        valor: parseDecimal(campos.valor.value),
+        descricao: campos.descricao.value.trim() || null,
+      });
+      closeModal('modal-lancamento');
+      toast('Salvo.');
+      refresh();
+    } catch {
+      toast('Não consegui salvar. Confere a conexão e tenta de novo.');
+    }
+  });
+
+  onClickOnce(btnRemover, async () => {
+    if (!await confirmar('Remover este lançamento?', { rotulo: 'Remover' })) return;
+    try {
+      await softDelete('lancamentos', campos.id.value);
+      closeModal('modal-lancamento');
+      toast('Removido.');
+      refresh();
+    } catch {
+      toast('Não consegui remover. Tenta de novo.');
+    }
+  });
 
   async function renderIndicacoes() {
     loadingState(listaIndicacoes);
@@ -159,12 +315,19 @@ export function initFinanceiro() {
   }
   mesIndicacoes.addEventListener('change', renderIndicacoes);
 
+  const graficoContainer = document.getElementById('fin-grafico-tendencia');
+
   async function refresh() {
     loadingState(listaLotes);
     loadingState(listaClientes);
+    loadingState(listaLancamentos);
+    loadingState(graficoContainer);
     renderIndicacoes();
     try {
-      const [cons, lotes, clientes] = await Promise.all([consolidado(), lucroPorLote(), lucroPorCliente()]);
+      const [cons, lotes, clientes, lancamentos, kpis, mensal] = await Promise.all([
+        consolidado(), lucroPorLote(), lucroPorClienteComAvulsos(), listarLancamentos(),
+        kpisAvancados(), tendenciaMensal(),
+      ]);
       document.getElementById('fin-investido').textContent = fmtMoney(cons.investido);
       document.getElementById('fin-recebido').textContent = fmtMoney(cons.recebido);
       document.getElementById('fin-areceber').textContent = fmtMoney(cons.a_receber);
@@ -172,13 +335,31 @@ export function initFinanceiro() {
       lucroEl.textContent = fmtMoney(cons.lucro_total);
       lucroEl.style = corLucro(cons.lucro_total);
 
+      document.getElementById('fin-ticket-medio').textContent = fmtMoney(kpis.ticketMedio);
+      document.getElementById('fin-margem').textContent = `${kpis.margem.toFixed(1)}%`;
+      const variacaoEl = document.getElementById('fin-variacao');
+      if (kpis.variacao == null) {
+        variacaoEl.textContent = '—';
+        variacaoEl.className = 'value';
+      } else {
+        const seta = kpis.variacao >= 0 ? '↑' : '↓';
+        variacaoEl.textContent = `${seta} ${Math.abs(kpis.variacao).toFixed(1)}%`;
+        variacaoEl.className = `value kpi-delta ${kpis.variacao >= 0 ? 'up' : 'down'}`;
+      }
+
+      renderInto(graficoContainer, graficoTendencia(mensal.slice(-12)));
+
       if (lotes.length) renderInto(listaLotes, lotes.map(cardLote));
       else emptyState(listaLotes, '📦', 'Nenhum lote ainda.');
       if (clientes.length) renderInto(listaClientes, clientes.map(cardCliente));
       else emptyState(listaClientes, '👤', 'Nenhum pedido ainda.');
+      if (lancamentos.length) renderInto(listaLancamentos, lancamentos.map((l) => cardLancamento(l, abrirModalLancamento)));
+      else emptyState(listaLancamentos, '💸', 'Nenhum lançamento avulso ainda.');
     } catch {
       errorState(listaLotes);
       errorState(listaClientes);
+      errorState(listaLancamentos);
+      errorState(graficoContainer);
     }
   }
 
