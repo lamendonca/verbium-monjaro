@@ -163,6 +163,12 @@ Fases **derivadas** dos dados — nenhum estado extra persistido. Por cliente at
 
 **Follow-up** (tabela `followups`, migration `007`): mover um card pra cá abre modal de **data + mensagem**. Um job `pg_cron` (`monjaro_followups`, diário às 12:00 UTC ≈ 9h Brasília) chama `monjaro.enviar_followups()`, que envia as mensagens vencidas via **Evolution API** (`pg_net` → `POST /message/sendText/{instance}`) e marca `enviado_em`. Credenciais em `monjaro.config` (`evolution_url`, `evolution_instance`, `evolution_apikey`) — RLS deny, anon não lê. Um followup pendente por cliente; sair da coluna cancela (`is_active=false`); após enviado, o card volta à derivação normal.
 
+**Mensagem gerada por IA** (migration `018`), pra não repetir sempre o mesmo texto:
+- Ao agendar (INSERT em `followups`), um trigger chama `monjaro.gerar_mensagem_ia()`, que dispara (via `pg_net`) uma chamada assíncrona a uma API de chat completions interna, usando **o rascunho digitado pelo operador como contexto/instrução** do prompt (não é descartado). Guarda o `ia_request_id` da chamada.
+- `pg_net` é assíncrono — a resposta não existe no mesmo statement. Um cron separado (`monjaro_ia_coleta`, a cada 10min) chama `monjaro.coletar_respostas_ia()`, que lê `net._http_response` pelo `ia_request_id` e grava o texto em `followups.mensagem_ia` quando a resposta chega (janela de tolerância: 2 dias).
+- `enviar_followups()` usa `COALESCE(mensagem_ia, mensagem)` — **fallback obrigatório**: se a IA não respondeu a tempo, falhou, ou as credenciais (`monjaro.config`: `ai_chat_url`, `ai_chat_token`, `ai_model`) não estão configuradas, sai o template original. Nunca mensagem vazia, nunca falha silenciosa de envio.
+- 100% dentro do Postgres (mesmo padrão de `pg_net`/`pg_cron` do envio Evolution) — sem infra nova (sem Edge Function).
+
 - Retomada pro funil é automática via alerta de recompra (§1); inclusão manual acontece ao cadastrar o cliente (entra sem pedido → Não iniciada).
 - "Não iniciada" ordena por urgência: atrasados → novos → alertas. "Entregue" ordena do mais recente.
 

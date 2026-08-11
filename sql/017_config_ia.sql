@@ -1,0 +1,14 @@
+-- =====================================================================
+-- 017 — documentação das novas chaves em monjaro.config, usadas pela
+-- geração de mensagem de follow-up por IA (018_followup_ia.sql).
+-- Mesmo tratamento das credenciais Evolution: RLS deny, populadas
+-- manualmente pelo operador via SQL editor, NUNCA num INSERT versionado.
+--
+--   ai_chat_url   ex.: https://grupoluizhohl.jarbisvision.com.br/api/chat/completions
+--   ai_chat_token Bearer token da API (interna da empresa)
+--   ai_model      nome do modelo em produção (ex.: "faturamento-teste" é só exemplo)
+--
+-- Sem essas 3 chaves preenchidas, a geração por IA não roda e o follow-up
+-- sai com o template padrão (fallback obrigatório — ver 018).
+-- Idempotente (nenhuma alteração de schema — só documentação).
+-- =====================================================================
